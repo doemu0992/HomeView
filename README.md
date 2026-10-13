@@ -15,6 +15,6 @@ Eine Home-Assistant-Oberfläche im Stil eines Apple-Home-Displays. Läuft ohne B
 2. Im Browser (Kiosk) `http://<home-assistant>:8123/local/homeview/index.html` öffnen.
 3. Beim ersten Start ein langlebiges Zugriffstoken eintragen (Profil → Sicherheit). Es wird nur lokal im Browser gespeichert.
 
-Räume, Geräte, Wetter und Energie-Messwerte werden automatisch aus Home Assistant gelesen. Tippen schaltet, langes Drücken auf eine dimmbare Lampe öffnet den Helligkeitsregler.
+Räume, Geräte, Wetter und Energie-Messwerte werden automatisch aus Home Assistant gelesen. Tippen schaltet. Langes Drücken (oder „···“ auf der Kachel) öffnet alle Funktionen des Geräts: bei Lampen Helligkeit, Farbtemperatur, RGB-Farbe und Effekte, bei Heizung Betriebsart, Zieltemperatur, Programme und Lüfter, bei Rollos Position und Neigung, bei Mediaplayern Lautstärke, Quelle und Titelwechsel u. v. m. Angezeigt wird nur, was das Gerät laut Home Assistant unterstützt.
 
-Unterstützt: Szenen, Heizung (climate), Licht, Schalter, Ventilator, Rollos, Schlösser, Mediaplayer, Leistungs-Sensoren.
+Unterstützt: Szenen, Licht (inkl. RGB/Farbtemperatur/Effekte), Heizung, Schalter, Ventilator, Luftbefeuchter, Rollos, Schlösser, Mediaplayer, Staubsauger, Buttons, Zahlen- und Auswahlfelder (number/select, input_*), Sensoren und Binärsensoren. Geräte ohne Raum stehen unter „Weitere“.

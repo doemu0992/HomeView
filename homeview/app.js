@@ -1,11 +1,12 @@
 "use strict";
 /* HomeView – Home-Assistant-Frontend im Stil eines Apple-Home-Displays.
-   Kein Build-Schritt: spricht direkt die WebSocket-API von Home Assistant. */
+   Kein Build-Schritt: spricht direkt die WebSocket-API von Home Assistant.
+   Tippen schaltet, langes Drücken (oder „···“) öffnet alle Funktionen des Geräts. */
 
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2, "0");
 const STORE = "homeview.conn";
-const HOME = "__home";
+const HOME = "__home", OTHER = "__other";
 
 /* ---------- Icons (Linien, 24er Raster) ---------- */
 const ICONS = {
@@ -18,6 +19,14 @@ const ICONS = {
   media: '<path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>',
   power: '<path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/>',
   thermo: '<path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0Z"/>',
+  drop: '<path d="M12 3s6 6.2 6 10.5a6 6 0 0 1-12 0C6 9.200 12 3 12 3Z"/>',
+  vacuum: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/><path d="M12 4v2.5"/>',
+  door: '<path d="M6 21V4h12v17M4 21h16"/><circle cx="14.500" cy="13" r=".8"/>',
+  motion: '<circle cx="12" cy="12" r="2"/><path d="M7.800 7.800a6 6 0 0 0 0 8.400M16.200 7.800a6 6 0 0 1 0 8.400M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14"/>',
+  gauge: '<path d="M4 17a8 8 0 1 1 16 0M12 17l4-5"/>',
+  sliders: '<path d="M5 4v6M5 14v6M12 4v2M12 10v10M19 4v10M19 18v2M3 10h4M10 6h4M17 14h4"/>',
+  button: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>',
+  list: '<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
 };
 const icon = k => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k]}</svg>`;
 
@@ -27,23 +36,50 @@ const WEATHER = {
   lightning: "Gewitter", "lightning-rainy": "Gewitter mit Regen", partlycloudy: "Leicht bewölkt", pouring: "Starkregen",
   rainy: "Regen", snowy: "Schnee", "snowy-rainy": "Schneeregen", sunny: "Sonnig", windy: "Windig", "windy-variant": "Windig",
 };
-const HVAC = { heating: "Heizt", cooling: "Kühlt", idle: "Bereit", off: "Aus", drying: "Entfeuchtet", fan: "Lüftet" };
+const HVAC_ACTION = { heating: "Heizt", cooling: "Kühlt", idle: "Bereit", off: "Aus", drying: "Entfeuchtet", fan: "Lüftet" };
+const HVAC_MODE = { off: "Aus", heat: "Heizen", cool: "Kühlen", heat_cool: "Auto", auto: "Automatik", dry: "Trocknen", fan_only: "Lüften" };
+const PRESET = { none: "Aus", eco: "Eco", away: "Abwesend", home: "Zuhause", comfort: "Komfort", sleep: "Schlafen", boost: "Boost", activity: "Aktiv" };
+const VAC = { cleaning: "Saugt", docked: "In Station", returning: "Fährt zurück", idle: "Bereit", paused: "Pausiert", error: "Fehler" };
 const fmt = (n, d = 1) => Number(n).toLocaleString("de-DE", { maximumFractionDigits: d });
+const label = (map, k) => map[k] || (String(k).charAt(0).toUpperCase() + String(k).slice(1).replace(/_/g, " "));
+const feat = (a, bit) => a.supported_features == null || (a.supported_features & bit) !== 0;
+
+/* ---------- Farbe ---------- */
+function rgbToHs([r, g, b]) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0;
+  if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [Math.round(((h * 60) + 360) % 360), Math.round(mx ? (d / mx) * 100 : 0)];
+}
+function hsToRgb([h, s]) {
+  s /= 100; const f = n => { const k = (n + h / 60) % 6; return Math.round(255 * (1 - s * Math.max(0, Math.min(k, 4 - k, 1)))); };
+  return [f(5), f(3), f(1)];
+}
 
 /* ---------- Zustand ---------- */
-let conn = null;                    // { call(domain, service, data, target), close() }
+let conn = null;                    // { call(domain, service, data, entity_id), close() }
 const states = new Map();           // entity_id -> state object
-let areas = [];                     // [{area_id, name}]
-const entityArea = new Map();       // entity_id -> area_id
+let areas = [];
+const entityArea = new Map();
 let room = HOME;
 const tiles = new Map();            // entity_id -> { el, update(state) }
+let sheetCtx = null;                // { id, update(state) }
+
+const domainOf = id => id.split(".")[0];
+const nameOf = s => s.attributes.friendly_name || s.entity_id;
+
+function pushState(s) {
+  states.set(s.entity_id, s);
+  tiles.get(s.entity_id)?.update(s);
+  if (sheetCtx && sheetCtx.id === s.entity_id) sheetCtx.update(s);
+}
 
 /* ---------- Home-Assistant-Verbindung ---------- */
 function connectHA(baseUrl, token, handlers) {
   const wsUrl = baseUrl.replace(/\/+$/, "").replace(/^http/, "ws") + "/api/websocket";
   let ws, id = 0, closed = false, retry = 0;
   const pending = new Map();
-
   const send = msg => ws.send(JSON.stringify(msg));
   const request = msg => new Promise((res, rej) => { const i = ++id; pending.set(i, { res, rej }); send({ ...msg, id: i }); });
 
@@ -89,31 +125,217 @@ async function loadRegistry(api) {
   states.clear(); st.forEach(s => states.set(s.entity_id, s));
   const devArea = new Map(dev.map(d => [d.id, d.area_id]));
   entityArea.clear();
-  const hidden = new Set();
   ent.forEach(e => {
-    if (e.hidden_by || e.disabled_by || e.entity_category) hidden.add(e.entity_id);
+    if (e.hidden_by || e.disabled_by || e.entity_category) states.delete(e.entity_id);
     const a = e.area_id || devArea.get(e.device_id);
     if (a) entityArea.set(e.entity_id, a);
   });
-  hidden.forEach(id => states.delete(id));
   areas = ar.map(a => ({ area_id: a.area_id, name: a.name }));
 }
 
-/* ---------- Kachel-Fabrik ---------- */
-const nameOf = s => s.attributes.friendly_name || s.entity_id;
-const domainOf = id => id.split(".")[0];
+/* ---------- Bedienelemente für das Detailfenster ---------- */
+function h(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+function ctl(parent, text) {
+  const w = h("div", "ctl"), row = h("div", "ctl-row"), v = h("span", "ctl-v");
+  row.append(h("span", "", text), v); w.append(row); parent.append(w);
+  return { w, v };
+}
+function slider(parent, { label: text, min, max, step = 1, fmt: f = x => x, grad, on }) {
+  const { w, v } = ctl(parent, text);
+  const inp = document.createElement("input");
+  inp.type = "range"; inp.min = min; inp.max = max; inp.step = step; inp.setAttribute("aria-label", text);
+  if (grad) inp.style.setProperty("--grad", grad);
+  let touched = 0, t;
+  const show = () => { v.textContent = f(Number(inp.value)); };
+  inp.addEventListener("input", () => { touched = Date.now(); show(); clearTimeout(t); t = setTimeout(() => on(Number(inp.value)), 120); });
+  w.append(inp);
+  return { w, inp, set(x) { if (x == null || Date.now() - touched < 1200) return; inp.value = x; show(); } };
+}
+function seg(parent, { label: text, options, on }) {
+  const { w } = ctl(parent, text), box = h("div", "seg");
+  const btns = options.map(([val, txt]) => {
+    const b = h("button", "", txt); b.type = "button"; b.addEventListener("click", () => on(val)); box.append(b); return [val, b];
+  });
+  w.append(box);
+  return { w, set(cur) { btns.forEach(([val, b]) => b.setAttribute("aria-pressed", String(val === cur))); } };
+}
+function actions(parent, items) {
+  const box = h("div", "actions");
+  items.forEach(([txt, fn]) => { const b = h("button", "", txt); b.type = "button"; b.addEventListener("click", fn); box.append(b); });
+  parent.append(box);
+}
+const onOff = (parent, text, on) => seg(parent, { label: text, options: [[true, "An"], [false, "Aus"]], on });
 
-function tileShell(cls, html) {
-  const el = document.createElement(cls.btn === false ? "div" : "button");
-  if (cls.btn !== false) el.type = "button";
-  el.className = "tile " + (cls.cls || "");
+/* ---------- Detailfenster pro Gerätetyp ---------- */
+const DETAIL = {
+  light(id, body, call) {
+    const a0 = states.get(id).attributes, modes = a0.supported_color_modes || [];
+    const has = m => modes.includes(m);
+    const dim = modes.some(m => m !== "onoff");
+    const color = ["hs", "xy", "rgb", "rgbw", "rgbww"].some(has);
+    const power = onOff(body, "Licht", v => call(v ? "turn_on" : "turn_off", {}));
+    const br = dim && slider(body, { label: "Helligkeit", min: 1, max: 100, fmt: x => x + " %", on: v => call("turn_on", { brightness_pct: v }) });
+    const lo = a0.min_color_temp_kelvin || 2000, hi = a0.max_color_temp_kelvin || 6500;
+    const ct = has("color_temp") && slider(body, { label: "Farbtemperatur", min: lo, max: hi, step: 50, fmt: x => x + " K",
+      grad: "linear-gradient(90deg,#ffa43c,#fff3e0,#bcd7ff)", on: v => call("turn_on", { color_temp_kelvin: v }) });
+    let hue, sat;
+    if (color) {
+      const push = () => call("turn_on", { hs_color: [Number(hue.inp.value), Number(sat.inp.value)] });
+      hue = slider(body, { label: "Farbton", min: 0, max: 360, fmt: x => x + "°", on: push,
+        grad: "linear-gradient(90deg,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)" });
+      sat = slider(body, { label: "Sättigung", min: 0, max: 100, fmt: x => x + " %", on: push });
+      const box = h("div", "swatches");
+      [[0, 100], [25, 100], [50, 100], [120, 100], [185, 100], [220, 100], [280, 100], [330, 100], [0, 0]].forEach(hs => {
+        const b = h("button"); b.type = "button"; b.setAttribute("aria-label", `Farbe ${hs[0]}°`);
+        b.style.background = hs[1] ? `hsl(${hs[0]} 100% 50%)` : "#fff";
+        b.addEventListener("click", () => call("turn_on", { hs_color: hs })); box.append(b);
+      });
+      body.append(box);
+    }
+    const fx = (a0.effect_list || []).length ? seg(body, { label: "Effekt", options: a0.effect_list.map(e => [e, e]), on: v => call("turn_on", { effect: v }) }) : null;
+    return s => {
+      const a = s.attributes, on = s.state === "on";
+      power.set(on);
+      br && br.set(a.brightness != null ? Math.round(a.brightness / 2.55) : null);
+      ct && ct.set(a.color_temp_kelvin);
+      if (color) {
+        const hs = a.hs_color || (a.rgb_color ? rgbToHs(a.rgb_color) : null);
+        if (hs) { hue.set(hs[0]); sat.set(hs[1]); sat.inp.style.setProperty("--grad", `linear-gradient(90deg,#fff,hsl(${hs[0]} 100% 50%))`); }
+        else sat.inp.style.setProperty("--grad", "linear-gradient(90deg,#fff,#f00)");
+      }
+      fx && fx.set(a.effect);
+    };
+  },
+
+  climate(id, body, call) {
+    const a0 = states.get(id).attributes;
+    const range = a0.temperature == null && a0.target_temp_low != null;
+    const cfg = { min: a0.min_temp ?? 7, max: a0.max_temp ?? 35, step: a0.target_temp_step || 0.5, fmt: x => fmt(x) + "°" };
+    const mode = (a0.hvac_modes || []).length ? seg(body, { label: "Betriebsart", options: a0.hvac_modes.map(m => [m, label(HVAC_MODE, m)]), on: v => call("set_hvac_mode", { hvac_mode: v }) }) : null;
+    let t, lowS, highS;
+    if (range) {
+      const push = () => call("set_temperature", { target_temp_low: Number(lowS.inp.value), target_temp_high: Number(highS.inp.value) });
+      lowS = slider(body, { ...cfg, label: "Untere Temperatur", on: push });
+      highS = slider(body, { ...cfg, label: "Obere Temperatur", on: push });
+    } else t = slider(body, { ...cfg, label: "Zieltemperatur", on: v => call("set_temperature", { temperature: v }) });
+    const pre = (a0.preset_modes || []).length ? seg(body, { label: "Programm", options: a0.preset_modes.map(m => [m, label(PRESET, m)]), on: v => call("set_preset_mode", { preset_mode: v }) }) : null;
+    const fan = (a0.fan_modes || []).length ? seg(body, { label: "Lüfter", options: a0.fan_modes.map(m => [m, label({ auto: "Auto", low: "Niedrig", medium: "Mittel", high: "Hoch" }, m)]), on: v => call("set_fan_mode", { fan_mode: v }) }) : null;
+    const sw = (a0.swing_modes || []).length ? seg(body, { label: "Schwenken", options: a0.swing_modes.map(m => [m, label({ off: "Aus", on: "An", vertical: "Vertikal", horizontal: "Horizontal", both: "Beides" }, m)]), on: v => call("set_swing_mode", { swing_mode: v }) }) : null;
+    return s => {
+      const a = s.attributes;
+      mode && mode.set(s.state);
+      if (range) { lowS.set(a.target_temp_low); highS.set(a.target_temp_high); } else t.set(a.temperature);
+      pre && pre.set(a.preset_mode); fan && fan.set(a.fan_mode); sw && sw.set(a.swing_mode);
+    };
+  },
+
+  cover(id, body, call) {
+    const a0 = states.get(id).attributes;
+    const btn = [];
+    if (feat(a0, 1)) btn.push(["Öffnen", () => call("open_cover", {})]);
+    if (feat(a0, 8)) btn.push(["Stopp", () => call("stop_cover", {})]);
+    if (feat(a0, 2)) btn.push(["Schließen", () => call("close_cover", {})]);
+    actions(body, btn);
+    const pos = a0.current_position != null && feat(a0, 4) ? slider(body, { label: "Position", min: 0, max: 100, fmt: x => x + " % offen", on: v => call("set_cover_position", { position: v }) }) : null;
+    const tilt = a0.current_tilt_position != null && feat(a0, 128) ? slider(body, { label: "Neigung", min: 0, max: 100, fmt: x => x + " %", on: v => call("set_cover_tilt_position", { tilt_position: v }) }) : null;
+    return s => { pos && pos.set(s.attributes.current_position); tilt && tilt.set(s.attributes.current_tilt_position); };
+  },
+
+  fan(id, body, call) {
+    const a0 = states.get(id).attributes;
+    const power = onOff(body, "Ventilator", v => call(v ? "turn_on" : "turn_off", {}));
+    const sp = feat(a0, 1) && a0.percentage != null ? slider(body, { label: "Geschwindigkeit", min: 0, max: 100, step: a0.percentage_step || 1, fmt: x => x + " %", on: v => call("set_percentage", { percentage: v }) }) : null;
+    const osc = a0.oscillating != null ? onOff(body, "Schwenken", v => call("oscillate", { oscillating: v })) : null;
+    const dir = a0.direction != null ? seg(body, { label: "Richtung", options: [["forward", "Vorwärts"], ["reverse", "Rückwärts"]], on: v => call("set_direction", { direction: v }) }) : null;
+    const pre = (a0.preset_modes || []).length ? seg(body, { label: "Programm", options: a0.preset_modes.map(m => [m, label({}, m)]), on: v => call("set_preset_mode", { preset_mode: v }) }) : null;
+    return s => {
+      const a = s.attributes;
+      power.set(s.state === "on"); sp && sp.set(a.percentage); osc && osc.set(!!a.oscillating); dir && dir.set(a.direction); pre && pre.set(a.preset_mode);
+    };
+  },
+
+  media_player(id, body, call) {
+    const a0 = states.get(id).attributes;
+    const pwr = feat(a0, 128) && feat(a0, 256) && a0.supported_features != null ? onOff(body, "Gerät", v => call(v ? "turn_on" : "turn_off", {})) : null;
+    const tr = [];
+    if (feat(a0, 16)) tr.push(["Zurück", () => call("media_previous_track", {})]);
+    tr.push(["Wiedergabe / Pause", () => call("media_play_pause", {})]);
+    if (feat(a0, 32)) tr.push(["Weiter", () => call("media_next_track", {})]);
+    actions(body, tr);
+    const vol = a0.volume_level != null && feat(a0, 4) ? slider(body, { label: "Lautstärke", min: 0, max: 100, fmt: x => x + " %", on: v => call("volume_set", { volume_level: v / 100 }) }) : null;
+    const mute = a0.is_volume_muted != null && feat(a0, 8) ? onOff(body, "Stumm", v => call("volume_mute", { is_volume_muted: v })) : null;
+    const src = (a0.source_list || []).length ? seg(body, { label: "Quelle", options: a0.source_list.map(x => [x, x]), on: v => call("select_source", { source: v }) }) : null;
+    const shuf = a0.shuffle != null ? onOff(body, "Zufällig", v => call("shuffle_set", { shuffle: v })) : null;
+    return s => {
+      const a = s.attributes;
+      pwr && pwr.set(s.state !== "off"); vol && vol.set(a.volume_level != null ? Math.round(a.volume_level * 100) : null);
+      mute && mute.set(!!a.is_volume_muted); src && src.set(a.source); shuf && shuf.set(!!a.shuffle);
+    };
+  },
+
+  lock(id, body, call) {
+    const a0 = states.get(id).attributes, items = [["Verriegeln", () => call("lock", {})], ["Entriegeln", () => call("unlock", {})]];
+    if ((a0.supported_features & 1) === 1) items.push(["Tür öffnen", () => call("open", {})]);
+    actions(body, items);
+    return () => {};
+  },
+
+  humidifier(id, body, call) {
+    const a0 = states.get(id).attributes;
+    const power = onOff(body, "Luftbefeuchter", v => call(v ? "turn_on" : "turn_off", {}));
+    const hum = slider(body, { label: "Zielfeuchte", min: a0.min_humidity ?? 20, max: a0.max_humidity ?? 80, fmt: x => x + " %", on: v => call("set_humidity", { humidity: v }) });
+    const mode = (a0.available_modes || []).length ? seg(body, { label: "Modus", options: a0.available_modes.map(m => [m, label({}, m)]), on: v => call("set_mode", { mode: v }) }) : null;
+    return s => { power.set(s.state === "on"); hum.set(s.attributes.humidity); mode && mode.set(s.attributes.mode); };
+  },
+
+  vacuum(id, body, call) {
+    const a0 = states.get(id).attributes;
+    actions(body, [["Start", () => call("start", {})], ["Pause", () => call("pause", {})], ["Zur Station", () => call("return_to_base", {})], ["Suchen", () => call("locate", {})]]);
+    const sp = (a0.fan_speed_list || []).length ? seg(body, { label: "Saugstärke", options: a0.fan_speed_list.map(m => [m, label({}, m)]), on: v => call("set_fan_speed", { fan_speed: v }) }) : null;
+    const info = h("div", "info"); body.append(info);
+    return s => { sp && sp.set(s.attributes.fan_speed); info.textContent = s.attributes.battery_level != null ? `Akku ${s.attributes.battery_level} %` : ""; };
+  },
+
+  number(id, body, call) { return numberDetail(id, body, call); },
+  input_number(id, body, call) { return numberDetail(id, body, call); },
+  select(id, body, call) { return selectDetail(id, body, call); },
+  input_select(id, body, call) { return selectDetail(id, body, call); },
+};
+function numberDetail(id, body, call) {
+  const a0 = states.get(id).attributes, u = a0.unit_of_measurement ? " " + a0.unit_of_measurement : "";
+  const sl = slider(body, { label: nameOf(states.get(id)), min: a0.min ?? 0, max: a0.max ?? 100, step: a0.step || 1, fmt: x => fmt(x) + u, on: v => call("set_value", { value: v }) });
+  return s => sl.set(parseFloat(s.state));
+}
+function selectDetail(id, body, call) {
+  const a0 = states.get(id).attributes;
+  const sg = seg(body, { label: "Auswahl", options: (a0.options || []).map(o => [o, o]), on: v => call("select_option", { option: v }) });
+  return s => sg.set(s.state);
+}
+
+function openSheet(id) {
+  const s = states.get(id), d = DETAIL[domainOf(id)];
+  if (!s || !d) return;
+  const body = $("sheetBody"); body.replaceChildren();
+  $("sheetTitle").textContent = nameOf(s);
+  const domain = domainOf(id);
+  const upd = d(id, body, (service, data) => conn.call(domain, service, data, id));
+  sheetCtx = { id, update: upd }; upd(s);
+  $("sheet").hidden = false; $("sheetClose").focus();
+}
+function closeSheet() { $("sheet").hidden = true; sheetCtx = null; }
+$("sheetClose").addEventListener("click", closeSheet);
+$("sheetBg").addEventListener("click", closeSheet);
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("sheet").hidden) closeSheet(); });
+
+/* ---------- Kachel-Fabrik ---------- */
+function tileShell(cls, html, btn = true) {
+  const el = document.createElement(btn ? "button" : "div");
+  if (btn) el.type = "button";
+  el.className = "tile " + cls;
   el.innerHTML = html;
   return el;
 }
-function basic(s, iconKey, cls = "") {
-  const el = tileShell({ cls }, `${icon(iconKey)}<div><div class="name"></div><div class="state"></div></div>`);
-  return el;
-}
+const basic = (iconKey, cls = "") => tileShell(cls, `${icon(iconKey)}<div><div class="name"></div><div class="state"></div></div>`);
 function setText(el, sel, t) { const n = el.querySelector(sel); if (n.textContent !== t) n.textContent = t; }
 function applyCommon(el, s, on, stateText) {
   el.classList.toggle("on", !!on);
@@ -123,160 +345,213 @@ function applyCommon(el, s, on, stateText) {
   if (el.tagName === "BUTTON") el.setAttribute("aria-pressed", String(!!on));
 }
 
-function press(el, onTap, onHold) {
+/* Tippen = Hauptaktion, langes Drücken / „···“ / Umschalt+Enter = alle Funktionen */
+function press(el, id, onTap) {
+  const hasDetail = !!DETAIL[domainOf(id)];
   let timer = null, held = false;
-  el.addEventListener("pointerdown", () => {
-    held = false;
-    if (onHold) timer = setTimeout(() => { held = true; onHold(); }, 500);
+  if (hasDetail) {
+    const more = h("span", "more", "···"); more.setAttribute("aria-hidden", "true"); el.append(more);
+    el.addEventListener("pointerdown", () => { held = false; timer = setTimeout(() => { held = true; openSheet(id); }, 500); });
+    ["pointerup", "pointerleave", "pointercancel"].forEach(ev => el.addEventListener(ev, () => clearTimeout(timer)));
+    el.addEventListener("contextmenu", e => { e.preventDefault(); });
+    el.addEventListener("keydown", e => { if (e.key === "Enter" && e.shiftKey) { e.preventDefault(); openSheet(id); } });
+  }
+  el.addEventListener("click", e => {
+    if (hasDetail && e.target.closest(".more")) return openSheet(id);
+    if (held) { held = false; return; }
+    onTap && onTap();
   });
-  const cancel = () => clearTimeout(timer);
-  el.addEventListener("pointerup", cancel);
-  el.addEventListener("pointerleave", cancel);
-  el.addEventListener("pointercancel", cancel);
-  el.addEventListener("click", () => { if (!held) onTap(); });
-  if (onHold) el.addEventListener("contextmenu", e => e.preventDefault());
 }
 
 const BUILDERS = {
-  light(id, s) {
-    const el = basic(s, "light");
-    const dimmable = () => {
-      const m = states.get(id)?.attributes.supported_color_modes || [];
-      return m.length && !(m.length === 1 && m[0] === "onoff");
-    };
-    press(el, () => conn.call("light", "toggle", {}, id), () => dimmable() && openSheet(id));
+  light(id) {
+    const el = basic("light");
+    press(el, id, () => conn.call("light", "toggle", {}, id));
     return { el, update(s) {
-      const on = s.state === "on";
-      const pct = on && s.attributes.brightness != null ? Math.round(s.attributes.brightness / 2.55) : null;
+      const a = s.attributes, on = s.state === "on";
+      const pct = on && a.brightness != null ? Math.round(a.brightness / 2.55) : null;
+      const rgb = on && a.rgb_color && a.color_mode && a.color_mode !== "color_temp" ? a.rgb_color : null;
+      rgb ? el.style.setProperty("--tint", `rgb(${rgb.join(",")})`) : el.style.removeProperty("--tint");
       applyCommon(el, s, on, on ? (pct != null ? `An · ${pct} %` : "An") : "Aus");
     }};
   },
-  switch(id, s) {
-    const el = basic(s, "switch");
-    press(el, () => conn.call("switch", "toggle", {}, id));
-    return { el, update(s) { const on = s.state === "on"; applyCommon(el, s, on, on ? "An" : "Aus"); } };
-  },
-  input_boolean(id, s) {
-    const el = basic(s, "switch");
-    press(el, () => conn.call("input_boolean", "toggle", {}, id));
-    return { el, update(s) { const on = s.state === "on"; applyCommon(el, s, on, on ? "An" : "Aus"); } };
-  },
-  fan(id, s) {
-    const el = basic(s, "fan");
-    press(el, () => conn.call("fan", "toggle", {}, id));
+  switch(id) { return toggleTile(id, "switch"); },
+  input_boolean(id) { return toggleTile(id, "switch"); },
+  fan(id) {
+    const el = basic("fan");
+    press(el, id, () => conn.call("fan", "toggle", {}, id));
     return { el, update(s) {
       const on = s.state === "on", p = s.attributes.percentage;
       applyCommon(el, s, on, on ? (p ? `Läuft · ${p} %` : "Läuft") : "Aus");
     }};
   },
-  lock(id, s) {
-    const el = basic(s, "lock");
-    press(el, () => conn.call("lock", states.get(id).state === "locked" ? "unlock" : "lock", {}, id));
+  humidifier(id) {
+    const el = basic("drop");
+    press(el, id, () => conn.call("humidifier", "toggle", {}, id));
+    return { el, update(s) {
+      const on = s.state === "on";
+      applyCommon(el, s, on, on ? `Ziel ${s.attributes.humidity ?? "–"} %` : "Aus");
+    }};
+  },
+  lock(id) {
+    const el = basic("lock");
+    press(el, id, () => conn.call("lock", states.get(id).state === "locked" ? "unlock" : "lock", {}, id));
     return { el, update(s) {
       const T = { locked: "Verriegelt", unlocked: "Offen", locking: "Verriegelt …", unlocking: "Öffnet …", jammed: "Klemmt", open: "Offen" };
       applyCommon(el, s, s.state === "locked", T[s.state] || s.state);
     }};
   },
-  cover(id, s) {
-    const el = basic(s, "cover");
-    press(el, () => conn.call("cover", "toggle", {}, id));
+  cover(id) {
+    const el = basic("cover");
+    press(el, id, () => conn.call("cover", "toggle", {}, id));
     return { el, update(s) {
       const pos = s.attributes.current_position;
       const T = { open: "Offen", closed: "Geschlossen", opening: "Öffnet …", closing: "Schließt …" };
-      applyCommon(el, s, s.state === "open" || s.state === "opening", (T[s.state] || s.state) + (pos != null && s.state === "open" ? ` · ${pos} %` : ""));
+      applyCommon(el, s, s.state === "open" || s.state === "opening", (T[s.state] || s.state) + (pos != null && pos > 0 && pos < 100 ? ` · ${pos} %` : ""));
     }};
   },
-  scene(id, s) {
-    const el = basic(s, "scene", "wide");
+  scene(id) {
+    const el = basic("scene", "wide");
     let t;
-    press(el, () => {
+    press(el, id, () => {
       conn.call("scene", "turn_on", {}, id);
       el.classList.add("on"); el.setAttribute("aria-pressed", "true"); setText(el, ".state", "Aktiv");
       clearTimeout(t); t = setTimeout(() => tiles.get(id)?.update(states.get(id)), 1600);
     });
     return { el, update(s) { applyCommon(el, s, false, "Tippen zum Starten"); } };
   },
-  climate(id, s) {
-    const el = tileShell({ cls: "climate tall", btn: false }, `
+  button(id) {
+    const el = basic("button");
+    press(el, id, () => conn.call("button", "press", {}, id));
+    return { el, update(s) { applyCommon(el, s, false, "Tippen zum Auslösen"); } };
+  },
+  input_button(id) {
+    const el = basic("button");
+    press(el, id, () => conn.call("input_button", "press", {}, id));
+    return { el, update(s) { applyCommon(el, s, false, "Tippen zum Auslösen"); } };
+  },
+  number(id) { return valueTile(id, "sliders"); },
+  input_number(id) { return valueTile(id, "sliders"); },
+  select(id) { return valueTile(id, "list"); },
+  input_select(id) { return valueTile(id, "list"); },
+  vacuum(id) {
+    const el = basic("vacuum");
+    press(el, id, () => conn.call("vacuum", states.get(id).state === "cleaning" ? "return_to_base" : "start", {}, id));
+    return { el, update(s) {
+      const b = s.attributes.battery_level;
+      applyCommon(el, s, s.state === "cleaning", (VAC[s.state] || s.state) + (b != null ? ` · ${b} %` : ""));
+    }};
+  },
+  climate(id) {
+    const el = tileShell("climate tall", `
       <div class="name"></div>
       <div class="dial"><svg viewBox="0 0 100 100" aria-hidden="true">
         <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="7" stroke-linecap="round" stroke-dasharray="198 264"/>
         <circle class="arc" cx="50" cy="50" r="42" fill="none" stroke="#ffb340" stroke-width="7" stroke-linecap="round" stroke-dasharray="0 264"/>
       </svg><div class="val"></div></div>
       <div class="stepper"><button type="button" data-d="-1" aria-label="Kälter">−</button><button type="button" data-d="1" aria-label="Wärmer">+</button></div>
-      <div class="state"></div>`);
-    let target = null, timer;
+      <div class="state"></div>`, false);
+    const more = h("span", "more", "···"); more.setAttribute("aria-hidden", "true"); el.append(more);
+    more.addEventListener("click", () => openSheet(id));
+    el.querySelector(".dial").addEventListener("click", () => openSheet(id));
+    let pend = null, timer;
     const a = () => states.get(id).attributes;
-    el.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
-      const at = a(), step = at.target_temp_step || (at.temperature_unit === "°F" ? 1 : 0.5);
-      if (target == null) target = at.temperature ?? at.current_temperature ?? 20;
-      target = Math.min(at.max_temp ?? 35, Math.max(at.min_temp ?? 7, target + step * Number(b.dataset.d)));
-      draw(at, target);
+    el.querySelectorAll(".stepper button").forEach(b => b.addEventListener("click", () => {
+      const at = a(), step = at.target_temp_step || (at.temperature_unit === "°F" ? 1 : 0.5), d = Number(b.dataset.d) * step;
+      const cl = x => Math.min(at.max_temp ?? 35, Math.max(at.min_temp ?? 7, x));
+      if (!pend) pend = at.temperature != null ? { t: at.temperature } : at.target_temp_low != null ? { lo: at.target_temp_low, hi: at.target_temp_high } : { t: at.current_temperature ?? 20 };
+      if ("t" in pend) pend.t = cl(pend.t + d); else { pend.lo = cl(pend.lo + d); pend.hi = cl(pend.hi + d); }
+      draw(at, pend);
       clearTimeout(timer);
-      timer = setTimeout(() => { conn.call("climate", "set_temperature", { temperature: target }, id); target = null; }, 700);
+      timer = setTimeout(() => {
+        conn.call("climate", "set_temperature", "t" in pend ? { temperature: pend.t } : { target_temp_low: pend.lo, target_temp_high: pend.hi }, id);
+        pend = null;
+      }, 700);
     }));
-    function draw(at, t) {
+    function draw(at, p) {
       const lo = at.min_temp ?? 7, hi = at.max_temp ?? 35;
+      const t = !p ? null : "t" in p ? p.t : p.hi;
       const f = t == null ? 0 : Math.min(1, Math.max(0, (t - lo) / (hi - lo)));
       el.querySelector(".arc").setAttribute("stroke-dasharray", `${198 * f} 264`);
-      el.querySelector(".val").textContent = t == null ? "–" : fmt(t) + "°";
+      const v = el.querySelector(".val");
+      v.textContent = !p ? "–" : "t" in p ? fmt(p.t) + "°" : `${fmt(p.lo, 0)}–${fmt(p.hi, 0)}°`;
+      v.style.fontSize = p && !("t" in p) ? "1.5rem" : "";
     }
     return { el, update(s) {
       const at = s.attributes, off = s.state === "off";
       el.classList.toggle("unavailable", s.state === "unavailable");
       setText(el, ".name", nameOf(s));
-      if (target == null) draw(at, off ? null : at.temperature ?? at.current_temperature);
-      const act = HVAC[at.hvac_action] || HVAC[s.state] || s.state;
+      if (!pend) draw(at, off ? null : at.temperature != null ? { t: at.temperature } : at.target_temp_low != null ? { lo: at.target_temp_low, hi: at.target_temp_high } : at.current_temperature != null ? { t: at.current_temperature } : null);
+      const act = HVAC_ACTION[at.hvac_action] || HVAC_MODE[s.state] || s.state;
       const cur = at.current_temperature != null ? ` · Jetzt ${fmt(at.current_temperature)}°` : "";
       setText(el, ".state", (off ? "Aus" : act) + cur);
     }};
   },
-  media_player(id, s) {
-    const el = tileShell({ cls: "media wide" }, `<div class="cover"></div><div><div class="name"></div><div class="state"></div><div class="bars"><i></i><i></i><i></i><i></i></div></div>`);
-    press(el, () => conn.call("media_player", "media_play_pause", {}, id));
+  media_player(id) {
+    const el = tileShell("media wide", `<div class="cover"></div><div><div class="name"></div><div class="state"></div><div class="bars"><i></i><i></i><i></i><i></i></div></div>`);
+    press(el, id, () => conn.call("media_player", "media_play_pause", {}, id));
     return { el, update(s) {
-      const playing = s.state === "playing", at = s.attributes;
-      const room = at.friendly_name || id;
-      const cover = el.querySelector(".cover");
-      cover.style.backgroundImage = at.entity_picture ? `url("${at.entity_picture}")` : "";
+      const playing = s.state === "playing", paused = s.state === "paused", at = s.attributes, room = at.friendly_name || id;
+      el.querySelector(".cover").style.backgroundImage = at.entity_picture ? `url("${at.entity_picture}")` : "";
       applyCommon(el, s, false, "");
       el.classList.toggle("on", playing);
-      setText(el, ".name", playing || s.state === "paused" ? (at.media_title || room) : room);
-      setText(el, ".state", s.state === "unavailable" ? "Nicht erreichbar" : playing ? (at.media_artist || room) : s.state === "paused" ? "Pausiert" : s.state === "off" ? "Aus" : "Bereit");
+      setText(el, ".name", playing || paused ? (at.media_title || room) : room);
+      setText(el, ".state", s.state === "unavailable" ? "Nicht erreichbar" : playing ? (at.media_artist || room) : paused ? "Pausiert" : s.state === "off" ? "Aus" : "Bereit");
     }};
   },
-  sensor(id, s) {
-    const el = tileShell({ cls: "metric wide", btn: false }, `<div class="name"></div><div class="big"></div>`);
+  sensor(id, s0) {
+    const power = ["power", "energy"].includes(s0.attributes.device_class);
+    const el = tileShell("metric" + (power ? " wide" : ""), `<div class="name"></div><div class="big"></div>`, false);
     return { el, update(s) {
       el.classList.toggle("unavailable", s.state === "unavailable");
       setText(el, ".name", nameOf(s));
       const v = parseFloat(s.state), unit = s.attributes.unit_of_measurement || "";
-      const big = el.querySelector(".big");
-      big.innerHTML = "";
-      big.append(isNaN(v) ? s.state : fmt(v));
-      const sm = document.createElement("small"); sm.textContent = unit; big.append(sm);
+      const big = el.querySelector(".big"); big.replaceChildren(isNaN(v) ? s.state : fmt(v));
+      big.append(h("small", "", unit));
     }};
   },
+  binary_sensor(id, s0) {
+    const dc = s0.attributes.device_class;
+    const kind = { door: ["door", "Offen", "Geschlossen"], window: ["door", "Offen", "Geschlossen"], opening: ["door", "Offen", "Geschlossen"], garage_door: ["door", "Offen", "Geschlossen"],
+      motion: ["motion", "Bewegung", "Ruhig"], occupancy: ["motion", "Belegt", "Frei"], presence: ["motion", "Anwesend", "Abwesend"],
+      moisture: ["drop", "Feucht", "Trocken"], smoke: ["motion", "Alarm", "OK"], gas: ["motion", "Alarm", "OK"] }[dc] || ["gauge", "An", "Aus"];
+    const el = basic(kind[0]); el.disabled = false; el.style.cursor = "default";
+    return { el, update(s) { const on = s.state === "on"; applyCommon(el, s, on, on ? kind[1] : kind[2]); } };
+  },
 };
-BUILDERS.sensor.accept = s => s.attributes.device_class === "power" || s.attributes.device_class === "energy";
-const ORDER = ["scene", "climate", "light", "switch", "input_boolean", "fan", "cover", "lock", "media_player", "sensor"];
+function toggleTile(id, iconKey) {
+  const el = basic(iconKey), dom = domainOf(id);
+  press(el, id, () => conn.call(dom, "toggle", {}, id));
+  return { el, update(s) { const on = s.state === "on"; applyCommon(el, s, on, on ? "An" : "Aus"); } };
+}
+function valueTile(id, iconKey) {
+  const el = basic(iconKey);
+  press(el, id, () => openSheet(id));
+  return { el, update(s) {
+    const u = s.attributes.unit_of_measurement;
+    const v = parseFloat(s.state);
+    applyCommon(el, s, false, DETAIL_SELECT(s) ? s.state : (isNaN(v) ? s.state : fmt(v)) + (u ? " " + u : ""));
+  }};
+}
+const DETAIL_SELECT = s => ["select", "input_select"].includes(domainOf(s.entity_id));
 
-function supported(s) {
-  const d = domainOf(s.entity_id);
-  if (!BUILDERS[d]) return false;
-  return d !== "sensor" || BUILDERS.sensor.accept(s);
+/* Was auf „Zuhause“ erscheint: Steuerbares und Wichtiges. Der Rest nur im Raum bzw. unter „Weitere“. */
+const ORDER = ["scene", "climate", "light", "switch", "input_boolean", "fan", "humidifier", "cover", "lock", "vacuum", "media_player", "button", "input_button", "number", "input_number", "select", "input_select", "binary_sensor", "sensor"];
+const HOME_DOMAINS = new Set(["scene", "climate", "light", "switch", "input_boolean", "fan", "humidifier", "cover", "lock", "vacuum", "media_player"]);
+const supported = s => !!BUILDERS[domainOf(s.entity_id)];
+const showOnHome = s => HOME_DOMAINS.has(domainOf(s.entity_id)) || (domainOf(s.entity_id) === "sensor" && ["power", "energy"].includes(s.attributes.device_class));
+
+function visibleIds() {
+  let list = [...states.values()].filter(supported);
+  if (room === HOME) list = list.filter(showOnHome);
+  else if (room === OTHER) list = list.filter(s => !entityArea.has(s.entity_id));
+  else list = list.filter(s => entityArea.get(s.entity_id) === room);
+  const rank = s => ORDER.indexOf(domainOf(s.entity_id));
+  list.sort((a, b) => rank(a) - rank(b) || nameOf(a).localeCompare(nameOf(b), "de"));
+  return list.slice(0, room === HOME ? 40 : 300).map(s => s.entity_id);
 }
 
 /* ---------- Darstellung ---------- */
-function visibleIds() {
-  let ids = [...states.values()].filter(supported).map(s => s.entity_id);
-  if (room !== HOME) ids = ids.filter(id => entityArea.get(id) === room);
-  const rank = id => ORDER.indexOf(domainOf(id));
-  const cap = room === HOME ? 40 : 200;
-  ids.sort((a, b) => rank(a) - rank(b) || nameOf(states.get(a)).localeCompare(nameOf(states.get(b)), "de"));
-  return ids.slice(0, cap);
-}
-
 let rafGrid = 0;
 function renderGrid() {
   cancelAnimationFrame(rafGrid);
@@ -293,12 +568,13 @@ function renderGrid() {
 }
 
 function renderRooms() {
-  const withDevices = areas.filter(a => [...entityArea].some(([id, ar]) => ar === a.area_id && states.has(id) && supported(states.get(id))));
+  const sup = [...states.values()].filter(supported);
+  const withDevices = areas.filter(a => sup.some(s => entityArea.get(s.entity_id) === a.area_id));
   const items = [{ area_id: HOME, name: "Zuhause" }, ...withDevices];
+  if (sup.some(s => !entityArea.has(s.entity_id) && !showOnHome(s))) items.push({ area_id: OTHER, name: "Weitere" });
   if (!items.some(i => i.area_id === room)) room = HOME;
   $("rooms").replaceChildren(...items.map(i => {
-    const b = document.createElement("button");
-    b.type = "button"; b.textContent = i.name;
+    const b = h("button", "", i.name); b.type = "button";
     if (i.area_id === room) b.setAttribute("aria-current", "true");
     b.addEventListener("click", () => { room = i.area_id; $("grid").scrollTop = 0; renderRooms(); renderGrid(); });
     return b;
@@ -309,37 +585,15 @@ function renderHeader() {
   const d = new Date();
   $("time").textContent = pad(d.getHours()) + ":" + pad(d.getMinutes());
   $("date").textContent = d.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
-  const w = [...states.values()].find(s => domainOf(s.entity_id) === "weather");
-  const c = [...states.values()].find(s => domainOf(s.entity_id) === "climate" && s.attributes.current_temperature != null);
+  const all = [...states.values()];
+  const w = all.find(s => domainOf(s.entity_id) === "weather");
+  const c = all.find(s => domainOf(s.entity_id) === "climate" && s.attributes.current_temperature != null);
   const parts = [];
-  if (w) {
-    const t = w.attributes.temperature;
-    parts.push(`<b>${t != null ? fmt(t, 0) + "°" : ""}</b>`, `<span>${WEATHER[w.state] || w.state}</span>`);
-  }
+  if (w) parts.push(`<b>${w.attributes.temperature != null ? fmt(w.attributes.temperature, 0) + "°" : ""}</b>`, `<span>${WEATHER[w.state] || w.state}</span>`);
   if (c) parts.push(`<span>Innen ${fmt(c.attributes.current_temperature)}°</span>`);
   $("wx").innerHTML = parts.join("");
 }
 setInterval(() => $("app").hidden || renderHeader(), 15000);
-
-/* ---------- Helligkeit ---------- */
-let sheetId = null;
-function openSheet(id) {
-  sheetId = id;
-  const s = states.get(id), pct = Math.round((s.attributes.brightness || 255) / 2.55);
-  $("sheetTitle").textContent = nameOf(s);
-  $("sheetRange").value = pct; $("sheetVal").textContent = pct + " %";
-  $("sheet").hidden = false; $("sheetRange").focus();
-}
-let sheetTimer;
-$("sheetRange").addEventListener("input", e => {
-  $("sheetVal").textContent = e.target.value + " %";
-  clearTimeout(sheetTimer);
-  sheetTimer = setTimeout(() => conn.call("light", "turn_on", { brightness_pct: Number(e.target.value) }, sheetId), 120);
-});
-const closeSheet = () => { $("sheet").hidden = true; sheetId = null; };
-$("sheetClose").addEventListener("click", closeSheet);
-$("sheetBg").addEventListener("click", closeSheet);
-document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("sheet").hidden) closeSheet(); });
 
 /* ---------- Start ---------- */
 function showApp() {
@@ -357,7 +611,7 @@ function startLive({ url, token }) {
         await loadRegistry(api);
         await api.subscribe();
         $("banner").hidden = true;
-        tiles.clear();
+        tiles.clear(); closeSheet();
         showApp();
       } catch (e) { $("err").textContent = "Daten konnten nicht geladen werden."; }
     },
@@ -365,12 +619,9 @@ function startLive({ url, token }) {
       const { entity_id, new_state } = ev.data;
       if (new_state) {
         const known = states.has(entity_id);
-        states.set(entity_id, new_state);
+        pushState(new_state);
         if (!known) { renderRooms(); renderGrid(); return; }
-        const t = tiles.get(entity_id);
-        if (t) t.update(new_state);
-        if (domainOf(entity_id) === "weather" || domainOf(entity_id) === "climate") renderHeader();
-        if (domainOf(entity_id) === "light" || domainOf(entity_id) === "media_player") { /* Reihenfolge bleibt stabil */ }
+        if (["weather", "climate"].includes(domainOf(entity_id))) renderHeader();
       } else { states.delete(entity_id); tiles.delete(entity_id); renderGrid(); }
     },
   });
@@ -392,45 +643,91 @@ function startDemo() {
     S("weather.home", "partlycloudy", { temperature: 14, friendly_name: "Zuhause" }),
     S("scene.filmabend", "scening", { friendly_name: "Filmabend" }),
     S("scene.guten_morgen", "scening", { friendly_name: "Guten Morgen" }),
-    S("climate.wohnzimmer", "heat", { friendly_name: "Wohnzimmer", temperature: 22, current_temperature: 21.5, min_temp: 16, max_temp: 28, target_temp_step: 0.5, hvac_action: "heating" }),
-    S("light.stehlampe", "on", { friendly_name: "Stehlampe", brightness: 153, supported_color_modes: ["brightness"] }),
-    S("light.decke", "on", { friendly_name: "Deckenlicht", brightness: 255, supported_color_modes: ["color_temp"] }),
-    S("light.kueche", "off", { friendly_name: "Küchenlicht", brightness: 0, supported_color_modes: ["brightness"] }),
-    S("light.bett", "off", { friendly_name: "Nachttisch", supported_color_modes: ["brightness"] }),
-    S("lock.haustuer", "unlocked", { friendly_name: "Haustür" }),
-    S("fan.ventilator", "off", { friendly_name: "Ventilator" }),
-    S("cover.rollo", "closed", { friendly_name: "Rollo Terrasse", current_position: 0 }),
+    S("climate.wohnzimmer", "heat", { friendly_name: "Wohnzimmer", temperature: 22, current_temperature: 21.5, min_temp: 16, max_temp: 28, target_temp_step: 0.5, hvac_action: "heating",
+      hvac_modes: ["off", "heat", "auto"], preset_modes: ["none", "eco", "comfort", "away"], preset_mode: "comfort", fan_modes: ["auto", "low", "medium", "high"], fan_mode: "auto" }),
+    S("light.stehlampe", "on", { friendly_name: "Stehlampe (RGB)", brightness: 153, supported_color_modes: ["hs", "color_temp"], color_mode: "hs", hs_color: [25, 85], rgb_color: [255, 150, 38],
+      color_temp_kelvin: 2700, min_color_temp_kelvin: 2000, max_color_temp_kelvin: 6500, effect_list: ["Kerze", "Regenbogen", "Puls"], effect: null }),
+    S("light.decke", "on", { friendly_name: "Deckenlicht", brightness: 255, supported_color_modes: ["color_temp"], color_mode: "color_temp", color_temp_kelvin: 3200, min_color_temp_kelvin: 2200, max_color_temp_kelvin: 6000 }),
+    S("light.kueche", "off", { friendly_name: "Küchenlicht", supported_color_modes: ["brightness"] }),
+    S("light.bett", "off", { friendly_name: "Nachttisch", supported_color_modes: ["onoff"] }),
+    S("lock.haustuer", "unlocked", { friendly_name: "Haustür", supported_features: 1 }),
+    S("fan.ventilator", "off", { friendly_name: "Ventilator", supported_features: 15, percentage: 40, percentage_step: 20, oscillating: false, direction: "forward", preset_modes: ["Natur", "Schlaf"], preset_mode: null }),
+    S("cover.rollo", "open", { friendly_name: "Rollo Terrasse", current_position: 60, current_tilt_position: 30, supported_features: 255 }),
     S("switch.kaffee", "off", { friendly_name: "Kaffeemaschine" }),
-    S("media_player.kueche", "playing", { friendly_name: "Küche", media_title: "Abendstimmung", media_artist: "Küche · HomePod" }),
+    S("media_player.kueche", "playing", { friendly_name: "Küche", media_title: "Abendstimmung", media_artist: "Küche · HomePod", volume_level: 0.35, is_volume_muted: false,
+      source_list: ["AirPlay", "Radio", "Bluetooth"], source: "AirPlay", shuffle: false, supported_features: 0xFFFF }),
+    S("humidifier.schlafzimmer", "on", { friendly_name: "Luftbefeuchter", humidity: 50, min_humidity: 30, max_humidity: 70, available_modes: ["normal", "sleep", "boost"], mode: "normal" }),
+    S("vacuum.robbi", "docked", { friendly_name: "Saugroboter", battery_level: 100, fan_speed_list: ["leise", "normal", "stark"], fan_speed: "normal" }),
     S("sensor.leistung", "1240", { friendly_name: "Energie jetzt", device_class: "power", unit_of_measurement: "W" }),
+    S("sensor.temp_aussen", "13.4", { friendly_name: "Außentemperatur", device_class: "temperature", unit_of_measurement: "°C" }),
+    S("sensor.feuchte_wz", "46", { friendly_name: "Luftfeuchte", device_class: "humidity", unit_of_measurement: "%" }),
+    S("binary_sensor.fenster_wz", "on", { friendly_name: "Fenster Wohnzimmer", device_class: "window" }),
+    S("binary_sensor.bewegung_flur", "off", { friendly_name: "Bewegung Flur", device_class: "motion" }),
+    S("input_number.nachtabsenkung", "17", { friendly_name: "Nachtabsenkung", min: 12, max: 21, step: 0.5, unit_of_measurement: "°C" }),
+    S("input_select.hausmodus", "Zuhause", { friendly_name: "Hausmodus", options: ["Zuhause", "Abwesend", "Urlaub"] }),
+    S("button.klingel_test", "unknown", { friendly_name: "Klingel testen" }),
   ];
   list.forEach(s => states.set(s.entity_id, s));
   areas = [{ area_id: "wz", name: "Wohnzimmer" }, { area_id: "ku", name: "Küche" }, { area_id: "sz", name: "Schlafzimmer" }, { area_id: "au", name: "Außen" }];
-  Object.entries({ "climate.wohnzimmer": "wz", "light.stehlampe": "wz", "light.decke": "wz", "fan.ventilator": "wz", "media_player.kueche": "ku",
-    "light.kueche": "ku", "switch.kaffee": "ku", "light.bett": "sz", "lock.haustuer": "au", "cover.rollo": "au" }).forEach(([k, v]) => entityArea.set(k, v));
+  Object.entries({ "climate.wohnzimmer": "wz", "light.stehlampe": "wz", "light.decke": "wz", "fan.ventilator": "wz", "sensor.feuchte_wz": "wz", "binary_sensor.fenster_wz": "wz",
+    "media_player.kueche": "ku", "light.kueche": "ku", "switch.kaffee": "ku", "light.bett": "sz", "humidifier.schlafzimmer": "sz",
+    "lock.haustuer": "au", "cover.rollo": "au", "sensor.temp_aussen": "au" }).forEach(([k, v]) => entityArea.set(k, v));
 
-  const set = (id, state, extra = {}) => {
-    const n = { ...states.get(id), state, attributes: { ...states.get(id).attributes, ...extra } };
-    states.set(id, n); tiles.get(id)?.update(n);
+  const set = (id, state, extra = {}) => { const o = states.get(id); pushState({ ...o, state, attributes: { ...o.attributes, ...extra } }); };
+  const at = id => states.get(id).attributes, st = id => states.get(id).state;
+  const SVC = {
+    "light.toggle": id => set(id, st(id) === "on" ? "off" : "on", st(id) === "off" && !at(id).brightness ? { brightness: 255 } : {}),
+    "light.turn_off": id => set(id, "off"),
+    "light.turn_on": (id, d) => {
+      const e = {};
+      if (d.brightness_pct != null) e.brightness = Math.round(d.brightness_pct * 2.55);
+      else if (!at(id).brightness) e.brightness = 255;
+      if (d.hs_color) { e.hs_color = d.hs_color; e.rgb_color = hsToRgb(d.hs_color); e.color_mode = "hs"; }
+      if (d.color_temp_kelvin) { e.color_temp_kelvin = d.color_temp_kelvin; e.color_mode = "color_temp"; }
+      if (d.effect) e.effect = d.effect;
+      set(id, "on", e);
+    },
+    "climate.set_hvac_mode": (id, d) => set(id, d.hvac_mode, { hvac_action: d.hvac_mode === "off" ? "off" : "heating" }),
+    "climate.set_temperature": (id, d) => set(id, st(id), d),
+    "climate.set_preset_mode": (id, d) => set(id, st(id), d),
+    "climate.set_fan_mode": (id, d) => set(id, st(id), d),
+    "cover.toggle": id => set(id, st(id) === "open" ? "closed" : "open", { current_position: st(id) === "open" ? 0 : 100 }),
+    "cover.open_cover": id => set(id, "open", { current_position: 100 }),
+    "cover.close_cover": id => set(id, "closed", { current_position: 0 }),
+    "cover.stop_cover": id => set(id, st(id)),
+    "cover.set_cover_position": (id, d) => set(id, d.position > 0 ? "open" : "closed", { current_position: d.position }),
+    "cover.set_cover_tilt_position": (id, d) => set(id, st(id), { current_tilt_position: d.tilt_position }),
+    "fan.toggle": id => set(id, st(id) === "on" ? "off" : "on"),
+    "fan.turn_on": id => set(id, "on"), "fan.turn_off": id => set(id, "off"),
+    "fan.set_percentage": (id, d) => set(id, d.percentage ? "on" : "off", d),
+    "fan.oscillate": (id, d) => set(id, st(id), { oscillating: d.oscillating }),
+    "fan.set_direction": (id, d) => set(id, st(id), d),
+    "fan.set_preset_mode": (id, d) => set(id, "on", d),
+    "lock.lock": id => set(id, "locked"), "lock.unlock": id => set(id, "unlocked"), "lock.open": id => set(id, "unlocked"),
+    "switch.toggle": id => set(id, st(id) === "on" ? "off" : "on"),
+    "humidifier.toggle": id => set(id, st(id) === "on" ? "off" : "on"),
+    "humidifier.turn_on": id => set(id, "on"), "humidifier.turn_off": id => set(id, "off"),
+    "humidifier.set_humidity": (id, d) => set(id, st(id), d), "humidifier.set_mode": (id, d) => set(id, st(id), d),
+    "vacuum.start": id => set(id, "cleaning"), "vacuum.pause": id => set(id, "paused"), "vacuum.return_to_base": id => set(id, "docked"),
+    "vacuum.locate": () => {}, "vacuum.set_fan_speed": (id, d) => set(id, st(id), d),
+    "media_player.media_play_pause": id => set(id, st(id) === "playing" ? "paused" : "playing"),
+    "media_player.volume_set": (id, d) => set(id, st(id), d), "media_player.volume_mute": (id, d) => set(id, st(id), d),
+    "media_player.select_source": (id, d) => set(id, st(id), d), "media_player.shuffle_set": (id, d) => set(id, st(id), d),
+    "media_player.turn_on": id => set(id, "idle"), "media_player.turn_off": id => set(id, "off"),
+    "media_player.media_next_track": () => {}, "media_player.media_previous_track": () => {},
+    "input_number.set_value": (id, d) => set(id, String(d.value)),
+    "input_select.select_option": (id, d) => set(id, d.option),
+    "button.press": () => {},
   };
-  conn = { close() {}, call(domain, service, data, id) {
-    const s = states.get(id); if (!s) return;
-    if (service === "toggle") set(id, s.state === "on" ? "off" : s.state === "open" ? "closed" : s.state === "closed" ? "open" : "on");
-    else if (domain === "lock") set(id, service === "lock" ? "locked" : "unlocked");
-    else if (service === "turn_on" && domain === "light") set(id, "on", { brightness: Math.round(data.brightness_pct * 2.55) });
-    else if (service === "set_temperature") set(id, s.state, { temperature: data.temperature });
-    else if (service === "media_play_pause") set(id, s.state === "playing" ? "paused" : "playing");
-  }};
+  conn = { close() {}, call(domain, service, data, id) { (SVC[`${domain}.${service}`] || (() => {}))(id, data || {}); } };
   showApp();
 }
-$("demoBtn").addEventListener("click", startDemo);
 
 (function init() {
-  const params = new URLSearchParams(location.search);
-  if (params.has("demo")) return startDemo();
+  if (typeof DEMO_ONLY !== "undefined" || new URLSearchParams(location.search).has("demo")) return startDemo();
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(STORE)); } catch {}
-  // Wird die Seite von Home Assistant selbst ausgeliefert (z. B. /local/homeview/), ist die Adresse bekannt.
   $("url").value = saved?.url || (location.protocol.startsWith("http") && location.port === "8123" ? location.origin : "");
   if (saved?.url && saved?.token) startLive(saved);
 })();
+$("demoBtn").addEventListener("click", startDemo);
