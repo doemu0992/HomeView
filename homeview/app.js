@@ -26,6 +26,8 @@ const ICONS = {
   gauge: '<path d="M4 17a8 8 0 1 1 16 0M12 17l4-5"/>',
   sliders: '<path d="M5 4v6M5 14v6M12 4v2M12 10v10M19 4v10M19 18v2M3 10h4M10 6h4M17 14h4"/>',
   button: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>',
+  shield: '<path d="M12 3 5 6v5c0 5 3 8.500 7 10 4-1.500 7-5 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/>',
+  camera: '<path d="M3 7h3l1.500-2h9L18 7h3v12H3Z"/><circle cx="12" cy="13" r="3.500"/>',
   list: '<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
 };
 const icon = k => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k]}</svg>`;
@@ -40,6 +42,18 @@ const HVAC_ACTION = { heating: "Heizt", cooling: "Kühlt", idle: "Bereit", off: 
 const HVAC_MODE = { off: "Aus", heat: "Heizen", cool: "Kühlen", heat_cool: "Auto", auto: "Automatik", dry: "Trocknen", fan_only: "Lüften" };
 const PRESET = { none: "Aus", eco: "Eco", away: "Abwesend", home: "Zuhause", comfort: "Komfort", sleep: "Schlafen", boost: "Boost", activity: "Aktiv" };
 const VAC = { cleaning: "Saugt", docked: "In Station", returning: "Fährt zurück", idle: "Bereit", paused: "Pausiert", error: "Fehler" };
+const ALARM = { disarmed: "Deaktiviert", armed_home: "Scharf · Zuhause", armed_away: "Scharf · Abwesend", armed_night: "Scharf · Nacht",
+  armed_vacation: "Scharf · Urlaub", armed_custom_bypass: "Scharf · Benutzerdefiniert", pending: "Wird ausgelöst …", arming: "Schaltet scharf …",
+  disarming: "Schaltet ab …", triggered: "ALARM" };
+const CAM = { idle: "Live-Bild", recording: "Nimmt auf", streaming: "Streamt", off: "Aus" };
+let haBase = "";
+const camUrl = s => {
+  const p = s.attributes.entity_picture || "";
+  if (!p || p.startsWith("data:") || /^https?:/.test(p)) return p;
+  return haBase + p + (p.includes("?") ? "&" : "?") + "_=" + Date.now();
+};
+const camStream = s => s.attributes.access_token && haBase
+  ? `${haBase}/api/camera_proxy_stream/${s.entity_id}?token=${s.attributes.access_token}` : camUrl(s);
 const fmt = (n, d = 1) => Number(n).toLocaleString("de-DE", { maximumFractionDigits: d });
 const label = (map, k) => map[k] || (String(k).charAt(0).toUpperCase() + String(k).slice(1).replace(/_/g, " "));
 const feat = (a, bit) => a.supported_features == null || (a.supported_features & bit) !== 0;
@@ -107,7 +121,7 @@ function connectHA(baseUrl, token, handlers) {
   const api = {
     request,
     call: (domain, service, data = {}, entity_id) =>
-      request({ type: "call_service", domain, service, service_data: data, ...(entity_id ? { target: { entity_id } } : {}) }).catch(() => {}),
+      request({ type: "call_service", domain, service, service_data: data, ...(entity_id ? { target: { entity_id } } : {}) }).then(() => true, () => false),
     subscribe: () => request({ type: "subscribe_events", event_type: "state_changed" }),
     close: () => { closed = true; ws && ws.close(); },
   };
@@ -296,6 +310,59 @@ const DETAIL = {
     return s => { sp && sp.set(s.attributes.fan_speed); info.textContent = s.attributes.battery_level != null ? `Akku ${s.attributes.battery_level} %` : ""; };
   },
 
+  alarm_control_panel(id, body, call) {
+    const a0 = states.get(id).attributes;
+    const code = a0.code_format != null;
+    let pin = "";
+    const status = h("div", "info big");
+    const err = h("div", "info err");
+    body.append(status);
+    let dots, field;
+    const draw = () => { if (dots) dots.textContent = pin ? "●".repeat(pin.length) : "Code eingeben"; };
+    if (code && a0.code_format === "number") {
+      dots = h("div", "pin"); body.append(dots);
+      const pad = h("div", "keypad");
+      ["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "⌫"].forEach(k => {
+        const b = h("button", "", k); b.type = "button"; b.setAttribute("aria-label", k === "C" ? "Eingabe löschen" : k === "⌫" ? "Letzte Ziffer löschen" : k);
+        b.addEventListener("click", () => { pin = k === "C" ? "" : k === "⌫" ? pin.slice(0, -1) : (pin + k).slice(0, 12); err.textContent = ""; draw(); });
+        pad.append(b);
+      });
+      body.append(pad); draw();
+    } else if (code) {
+      field = document.createElement("input"); field.type = "password"; field.placeholder = "Code"; field.className = "textin";
+      field.setAttribute("aria-label", "Code"); field.addEventListener("input", () => { pin = field.value; err.textContent = ""; });
+      body.append(field);
+    }
+    const run = svc => async () => {
+      const ok = await call(svc, code ? { code: pin } : {});
+      if (ok) { pin = ""; if (field) field.value = ""; draw(); err.textContent = ""; } else err.textContent = code ? "Code falsch oder Aktion nicht möglich." : "Aktion nicht möglich.";
+    };
+    const items = [["Deaktivieren", run("alarm_disarm")]];
+    if (feat(a0, 1)) items.push(["Zuhause scharf", run("alarm_arm_home")]);
+    if (feat(a0, 2)) items.push(["Abwesend scharf", run("alarm_arm_away")]);
+    if (feat(a0, 4)) items.push(["Nacht scharf", run("alarm_arm_night")]);
+    if ((a0.supported_features & 32) === 32) items.push(["Urlaub scharf", run("alarm_arm_vacation")]);
+    actions(body, items); body.append(err);
+    return s => { status.textContent = ALARM[s.state] || s.state; };
+  },
+
+  camera(id, body, call) {
+    const a0 = states.get(id).attributes;
+    const img = document.createElement("img");
+    img.className = "camview"; img.alt = "Kamerabild";
+    body.append(img);
+    const pwr = (a0.supported_features & 1) === 1 ? onOff(body, "Kamera", v => call(v ? "turn_on" : "turn_off", {})) : null;
+    const info = h("div", "info"); body.append(info);
+    let started = false;
+    const upd = s => {
+      if (!started) { started = true; img.src = camStream(s); }
+      pwr && pwr.set(s.state !== "off");
+      info.textContent = CAM[s.state] || s.state;
+    };
+    upd.cleanup = () => { img.removeAttribute("src"); };
+    return upd;
+  },
+
   number(id, body, call) { return numberDetail(id, body, call); },
   input_number(id, body, call) { return numberDetail(id, body, call); },
   select(id, body, call) { return selectDetail(id, body, call); },
@@ -318,11 +385,12 @@ function openSheet(id) {
   const body = $("sheetBody"); body.replaceChildren();
   $("sheetTitle").textContent = nameOf(s);
   const domain = domainOf(id);
+  $("sheet").dataset.kind = domain;
   const upd = d(id, body, (service, data) => conn.call(domain, service, data, id));
   sheetCtx = { id, update: upd }; upd(s);
   $("sheet").hidden = false; $("sheetClose").focus();
 }
-function closeSheet() { $("sheet").hidden = true; sheetCtx = null; }
+function closeSheet() { sheetCtx?.update.cleanup?.(); $("sheet").hidden = true; sheetCtx = null; $("sheetBody").replaceChildren(); }
 $("sheetClose").addEventListener("click", closeSheet);
 $("sheetBg").addEventListener("click", closeSheet);
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("sheet").hidden) closeSheet(); });
@@ -442,6 +510,29 @@ const BUILDERS = {
       applyCommon(el, s, s.state === "cleaning", (VAC[s.state] || s.state) + (b != null ? ` · ${b} %` : ""));
     }};
   },
+  alarm_control_panel(id) {
+    const el = basic("shield");
+    press(el, id, () => openSheet(id));
+    return { el, update(s) {
+      const armed = s.state.startsWith("armed"), trig = s.state === "triggered";
+      applyCommon(el, s, armed, ALARM[s.state] || s.state);
+      el.classList.toggle("alert", trig);
+    }};
+  },
+  camera(id) {
+    const el = tileShell("camera wide", `<img alt=""><div class="scrim"></div><div class="lbl"><div class="name"></div><div class="state"></div></div>`);
+    const img = el.querySelector("img");
+    img.addEventListener("error", () => { img.style.visibility = "hidden"; });
+    img.addEventListener("load", () => { img.style.visibility = ""; });
+    press(el, id, () => openSheet(id));
+    let shown = null;
+    const load = s => { const u = camUrl(s); if (u) img.src = u; };
+    return { el, refresh() { const s = states.get(id); if (s && s.state !== "unavailable" && s.state !== "off") load(s); },
+      update(s) {
+        if (shown !== s.attributes.entity_picture) { shown = s.attributes.entity_picture; load(s); }
+        applyCommon(el, s, false, CAM[s.state] || s.state);
+      }};
+  },
   climate(id) {
     const el = tileShell("climate tall", `
       <div class="name"></div>
@@ -536,8 +627,8 @@ function valueTile(id, iconKey) {
 const DETAIL_SELECT = s => ["select", "input_select"].includes(domainOf(s.entity_id));
 
 /* Was auf „Zuhause“ erscheint: Steuerbares und Wichtiges. Der Rest nur im Raum bzw. unter „Weitere“. */
-const ORDER = ["scene", "climate", "light", "switch", "input_boolean", "fan", "humidifier", "cover", "lock", "vacuum", "media_player", "button", "input_button", "number", "input_number", "select", "input_select", "binary_sensor", "sensor"];
-const HOME_DOMAINS = new Set(["scene", "climate", "light", "switch", "input_boolean", "fan", "humidifier", "cover", "lock", "vacuum", "media_player"]);
+const ORDER = ["alarm_control_panel", "scene", "camera", "climate", "light", "switch", "input_boolean", "fan", "humidifier", "cover", "lock", "vacuum", "media_player", "button", "input_button", "number", "input_number", "select", "input_select", "binary_sensor", "sensor"];
+const HOME_DOMAINS = new Set(["alarm_control_panel", "camera", "scene", "climate", "light", "switch", "input_boolean", "fan", "humidifier", "cover", "lock", "vacuum", "media_player"]);
 const supported = s => !!BUILDERS[domainOf(s.entity_id)];
 const showOnHome = s => HOME_DOMAINS.has(domainOf(s.entity_id)) || (domainOf(s.entity_id) === "sensor" && ["power", "energy"].includes(s.attributes.device_class));
 
@@ -603,6 +694,7 @@ function showApp() {
 }
 
 function startLive({ url, token }) {
+  haBase = url.replace(/\/+$/, "");
   conn = connectHA(url, token, {
     onAuthError() { localStorage.removeItem(STORE); $("app").hidden = true; $("setup").hidden = false; $("err").textContent = "Token wurde abgelehnt. Bitte neu eingeben."; },
     onStatus(ok) { $("banner").hidden = ok; },
@@ -636,7 +728,14 @@ $("setupForm").addEventListener("submit", e => {
   startLive({ url, token });
 });
 
+/* ---------- Kamerabilder aktualisieren ---------- */
+setInterval(() => { if (!document.hidden) tiles.forEach(t => t.refresh && t.el.isConnected && t.refresh()); }, 10000);
+
 /* ---------- Demo ---------- */
+function demoFrame(label, hue) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="hsl(${hue} 30% 35%)"/><stop offset="1" stop-color="hsl(${hue} 35% 12%)"/></linearGradient></defs><rect width="320" height="180" fill="url(#g)"/><path d="M0 130 L90 105 L190 118 L320 95 V180 H0Z" fill="hsl(${hue} 25% 18%)"/><rect x="215" y="62" width="46" height="68" rx="3" fill="hsl(${hue} 20% 24%)"/><rect x="224" y="72" width="28" height="30" fill="hsl(40 80% 70%)" opacity=".75"/><circle cx="70" cy="125" r="14" fill="hsl(${hue} 30% 22%)"/></svg>`;
+  return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+}
 function startDemo() {
   const S = (entity_id, state, attributes = {}) => ({ entity_id, state, attributes });
   const list = [
@@ -658,6 +757,9 @@ function startDemo() {
       source_list: ["AirPlay", "Radio", "Bluetooth"], source: "AirPlay", shuffle: false, supported_features: 0xFFFF }),
     S("humidifier.schlafzimmer", "on", { friendly_name: "Luftbefeuchter", humidity: 50, min_humidity: 30, max_humidity: 70, available_modes: ["normal", "sleep", "boost"], mode: "normal" }),
     S("vacuum.robbi", "docked", { friendly_name: "Saugroboter", battery_level: 100, fan_speed_list: ["leise", "normal", "stark"], fan_speed: "normal" }),
+    S("alarm_control_panel.haus", "disarmed", { friendly_name: "Alarmanlage", code_format: "number", code_arm_required: false, supported_features: 63 }),
+    S("camera.eingang", "streaming", { friendly_name: "Eingang", supported_features: 3, entity_picture: demoFrame("Eingang", 205) }),
+    S("camera.garten", "idle", { friendly_name: "Garten", supported_features: 3, entity_picture: demoFrame("Garten", 130) }),
     S("sensor.leistung", "1240", { friendly_name: "Energie jetzt", device_class: "power", unit_of_measurement: "W" }),
     S("sensor.temp_aussen", "13.4", { friendly_name: "Außentemperatur", device_class: "temperature", unit_of_measurement: "°C" }),
     S("sensor.feuchte_wz", "46", { friendly_name: "Luftfeuchte", device_class: "humidity", unit_of_measurement: "%" }),
@@ -671,7 +773,7 @@ function startDemo() {
   areas = [{ area_id: "wz", name: "Wohnzimmer" }, { area_id: "ku", name: "Küche" }, { area_id: "sz", name: "Schlafzimmer" }, { area_id: "au", name: "Außen" }];
   Object.entries({ "climate.wohnzimmer": "wz", "light.stehlampe": "wz", "light.decke": "wz", "fan.ventilator": "wz", "sensor.feuchte_wz": "wz", "binary_sensor.fenster_wz": "wz",
     "media_player.kueche": "ku", "light.kueche": "ku", "switch.kaffee": "ku", "light.bett": "sz", "humidifier.schlafzimmer": "sz",
-    "lock.haustuer": "au", "cover.rollo": "au", "sensor.temp_aussen": "au" }).forEach(([k, v]) => entityArea.set(k, v));
+    "lock.haustuer": "au", "camera.eingang": "au", "camera.garten": "au", "alarm_control_panel.haus": "au", "cover.rollo": "au", "sensor.temp_aussen": "au" }).forEach(([k, v]) => entityArea.set(k, v));
 
   const set = (id, state, extra = {}) => { const o = states.get(id); pushState({ ...o, state, attributes: { ...o.attributes, ...extra } }); };
   const at = id => states.get(id).attributes, st = id => states.get(id).state;
@@ -718,8 +820,13 @@ function startDemo() {
     "input_number.set_value": (id, d) => set(id, String(d.value)),
     "input_select.select_option": (id, d) => set(id, d.option),
     "button.press": () => {},
+    "camera.turn_on": id => set(id, "idle"), "camera.turn_off": id => set(id, "off"),
+    "alarm_control_panel.alarm_disarm": (id, d) => (d.code === "1234" ? set(id, "disarmed") : false),
+    ...Object.fromEntries(["home", "away", "night", "vacation"].map(m => [`alarm_control_panel.alarm_arm_${m}`, id => {
+      set(id, "arming"); setTimeout(() => set(id, "armed_" + m), 1500);
+    }])),
   };
-  conn = { close() {}, call(domain, service, data, id) { (SVC[`${domain}.${service}`] || (() => {}))(id, data || {}); } };
+  conn = { close() {}, call(domain, service, data, id) { const r = (SVC[`${domain}.${service}`] || (() => {}))(id, data || {}); return Promise.resolve(r !== false); } };
   showApp();
 }
 

@@ -136,5 +136,22 @@ button.primary{background:#fff!important;color:var(--on-ink)}
 .tile{position:relative}
 .tile.on .ic{color:var(--tint,#e8920a)}
 
+/* Alarm & Kamera */
+.tile.alert{background:rgba(255,69,58,.9);color:#fff;animation:alarm 1s ease-in-out infinite}
+.tile.alert .state,.tile.alert .ic{color:#fff}
+@keyframes alarm{50%{background:rgba(255,69,58,.5)}}
+.camera{padding:0;overflow:hidden;justify-content:flex-end}
+.camera img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.camera .scrim{position:absolute;inset:0;background:linear-gradient(transparent 45%,rgba(0,0,0,.65))}
+.camera .lbl{position:relative;padding:1rem 1.3rem;color:#fff}
+.camera .state{color:rgba(255,255,255,.8)}
+.camview{width:100%;aspect-ratio:16/9;max-height:48vh;object-fit:contain;border-radius:1.2rem;background:#000}
+.sheet[data-kind=camera] .sheet-card{width:min(54rem,100%)}
+.info.big{font-size:1.8rem;color:#fff;text-align:center;font-weight:300}
+.info.err{color:#ff8a80;min-height:1.3em;text-align:center}
+.pin{text-align:center;font-size:1.6rem;letter-spacing:.4rem;min-height:2.2rem;color:var(--ink-2)}
+.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:.6rem;width:min(18rem,100%);margin:0 auto}
+.keypad button{border:0;border-radius:1.2rem;padding:.9rem 0;font-size:1.6rem;background:rgba(255,255,255,.14);cursor:pointer}
+.textin{font:inherit;font-size:1.3rem;padding:.8rem 1rem;border-radius:1rem;border:0;background:rgba(0,0,0,.28);color:#fff;user-select:auto}
 .banner{position:fixed;top:.8rem;left:50%;transform:translateX(-50%);z-index:9;padding:.5rem 1.2rem;border-radius:99px;background:rgba(0,0,0,.6);font-size:1.1rem}
-@media (prefers-reduced-motion:reduce){.bars i{animation:none;height:70%}.tile{transition:none}}
+@media (prefers-reduced-motion:reduce){.tile.alert{animation:none}.bars i{animation:none;height:70%}.tile{transition:none}}
