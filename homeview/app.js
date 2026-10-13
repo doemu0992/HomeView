@@ -419,12 +419,13 @@ function press(el, id, onTap) {
   let timer = null, held = false;
   if (hasDetail) {
     const more = h("span", "more", "···"); more.setAttribute("aria-hidden", "true"); el.append(more);
-    el.addEventListener("pointerdown", () => { held = false; timer = setTimeout(() => { held = true; openSheet(id); }, 500); });
+    el.addEventListener("pointerdown", () => { if (editing) return; held = false; timer = setTimeout(() => { held = true; openSheet(id); }, 500); });
     ["pointerup", "pointerleave", "pointercancel"].forEach(ev => el.addEventListener(ev, () => clearTimeout(timer)));
     el.addEventListener("contextmenu", e => { e.preventDefault(); });
     el.addEventListener("keydown", e => { if (e.key === "Enter" && e.shiftKey) { e.preventDefault(); openSheet(id); } });
   }
   el.addEventListener("click", e => {
+    if (editing) return;
     if (hasDetail && e.target.closest(".more")) return openSheet(id);
     if (held) { held = false; return; }
     onTap && onTap();
@@ -639,7 +640,53 @@ function visibleIds() {
   else list = list.filter(s => entityArea.get(s.entity_id) === room);
   const rank = s => ORDER.indexOf(domainOf(s.entity_id));
   list.sort((a, b) => rank(a) - rank(b) || nameOf(a).localeCompare(nameOf(b), "de"));
-  return list.slice(0, room === HOME ? 40 : 300).map(s => s.entity_id);
+  let ids = list.slice(0, room === HOME ? 40 : 300).map(s => s.entity_id);
+  const lay = layout[room];
+  if (lay) {
+    const pos = new Map(lay.order.map((id, i) => [id, i]));
+    ids = ids.map((id, i) => [id, i]).sort((x, y) => (pos.has(x[0]) ? pos.get(x[0]) : 1e6 + x[1]) - (pos.has(y[0]) ? pos.get(y[0]) : 1e6 + y[1])).map(x => x[0]);
+    if (!editing) ids = ids.filter(id => !lay.hidden.includes(id));
+  }
+  return ids;
+}
+
+/* ---------- Layout: Reihenfolge, Größe, Ausblenden (pro Raum, lokal gespeichert) ---------- */
+const LAYOUT_KEY = "homeview.layout";
+let layout = {};
+try { layout = JSON.parse(localStorage.getItem(LAYOUT_KEY)) || {}; } catch {}
+const saveLayout = () => { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); } catch {} };
+const roomLayout = () => (layout[room] ||= { order: [], size: {}, hidden: [] });
+const SIZES = ["1x1", "2x1", "2x2", "1x2"];
+function defaultSize(id) {
+  const s = states.get(id), d = domainOf(id);
+  if (["scene", "camera", "media_player"].includes(d)) return "2x1";
+  if (d === "climate") return "1x2";
+  if (d === "sensor" && ["power", "energy"].includes(s.attributes.device_class)) return "2x1";
+  return "1x1";
+}
+const sizeOf = id => layout[room]?.size[id] || defaultSize(id);
+function applySize(el, size) {
+  const [c, r] = size.split("x");
+  el.style.gridColumn = "span " + c; el.style.gridRow = "span " + r; el.dataset.size = size;
+}
+
+let editing = false;
+function setEditing(v) {
+  editing = v; $("app").classList.toggle("editing", v);
+  closeSheet(); renderRooms(); renderGrid();
+}
+function decorate(id, t) {
+  applySize(t.el, sizeOf(id));
+  t.el.dataset.id = id;
+  const hidden = !!layout[room]?.hidden.includes(id);
+  t.el.classList.toggle("is-hidden", editing && hidden);
+  if (editing) {
+    if (!t.ctrl) { t.ctrl = h("div", "edit-ctrl"); t.ctrl.append(h("span", "ec-hide"), h("span", "ec-size")); }
+    t.ctrl.querySelector(".ec-hide").textContent = hidden ? "+" : "−";
+    t.ctrl.querySelector(".ec-hide").setAttribute("aria-label", hidden ? "Einblenden" : "Ausblenden");
+    t.ctrl.querySelector(".ec-size").textContent = sizeOf(id).replace("x", "×");
+    t.el.append(t.ctrl);
+  } else t.ctrl?.remove();
 }
 
 /* ---------- Darstellung ---------- */
@@ -651,12 +698,89 @@ function renderGrid() {
       const s = states.get(id);
       let t = tiles.get(id);
       if (!t) { t = BUILDERS[domainOf(id)](id, s); tiles.set(id, t); }
-      t.update(s);
+      t.update(s); decorate(id, t);
       return t.el;
     });
     $("grid").replaceChildren(...els);
   });
 }
+
+/* Ziehen zum Umsortieren, Tippen auf Symbole zum Ändern der Größe */
+(function setupDrag() {
+  const grid = $("grid");
+  let drag = null, lastSwap = 0;
+  const flip = fn => {
+    const kids = [...grid.children].filter(k => k !== drag.el);
+    const before = new Map(kids.map(k => [k, k.getBoundingClientRect()]));
+    fn();
+    kids.forEach(k => {
+      const a = before.get(k), b = k.getBoundingClientRect();
+      const dx = a.left - b.left, dy = a.top - b.top;
+      if (!dx && !dy) return;
+      k.style.transition = "none"; k.style.transform = `translate(${dx}px,${dy}px)`;
+      requestAnimationFrame(() => { k.style.transition = "transform .25s ease"; k.style.transform = ""; });
+    });
+  };
+  function frame() {
+    if (!drag || !drag.moved) return;
+    const d = drag, g = grid.getBoundingClientRect();
+    if (d.y < g.top + 40) grid.scrollTop -= 10; else if (d.y > g.bottom - 40) grid.scrollTop += 10;
+    d.el.style.transform = "none";
+    const base = d.el.getBoundingClientRect();
+    d.el.style.transform = `translate(${d.x - d.gx - base.left}px,${d.y - d.gy - base.top}px) scale(1.05)`;
+    const under = document.elementFromPoint(d.x, d.y)?.closest(".tile");
+    if (under && under !== d.el && under.parentNode === grid && performance.now() - lastSwap > 180) {
+      const kids = [...grid.children];
+      lastSwap = performance.now();
+      flip(() => (kids.indexOf(d.el) < kids.indexOf(under) ? under.after(d.el) : under.before(d.el)));
+    }
+    requestAnimationFrame(frame);
+  }
+  grid.addEventListener("pointerdown", e => {
+    if (!editing) return;
+    const el = e.target.closest(".tile"); if (!el) return;
+    const r = el.getBoundingClientRect();
+    drag = { el, id: el.dataset.id, sx: e.clientX, sy: e.clientY, x: e.clientX, y: e.clientY, gx: e.clientX - r.left, gy: e.clientY - r.top, moved: false, pid: e.pointerId };
+    try { grid.setPointerCapture(e.pointerId); } catch {}
+  });
+  grid.addEventListener("pointermove", e => {
+    if (!drag || e.pointerId !== drag.pid) return;
+    drag.x = e.clientX; drag.y = e.clientY;
+    if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 8) {
+      drag.moved = true; drag.el.classList.add("dragging"); requestAnimationFrame(frame);
+    }
+  });
+  const end = e => {
+    if (!drag || e.pointerId !== drag.pid) return;
+    const d = drag; drag = null;
+    if (d.moved) {
+      d.el.classList.remove("dragging"); d.el.style.transform = "";
+      roomLayout().order = [...grid.children].map(k => k.dataset.id); saveLayout();
+      return;
+    }
+    if (e.type === "pointercancel") return;
+    const t = tiles.get(d.id); if (!t || !t.ctrl) return;
+    const hit = n => { const r = n.getBoundingClientRect(); return e.clientX >= r.left - 6 && e.clientX <= r.right + 6 && e.clientY >= r.top - 6 && e.clientY <= r.bottom + 6; };
+    const lay = roomLayout();
+    if (hit(t.ctrl.querySelector(".ec-size"))) {
+      lay.size[d.id] = SIZES[(SIZES.indexOf(sizeOf(d.id)) + 1) % SIZES.length];
+      if (!lay.order.length) lay.order = [...grid.children].map(k => k.dataset.id);
+      saveLayout(); decorate(d.id, t);
+    } else if (hit(t.ctrl.querySelector(".ec-hide"))) {
+      const i = lay.hidden.indexOf(d.id);
+      i < 0 ? lay.hidden.push(d.id) : lay.hidden.splice(i, 1);
+      if (!lay.order.length) lay.order = [...grid.children].map(k => k.dataset.id);
+      saveLayout(); decorate(d.id, t);
+    }
+  };
+  grid.addEventListener("pointerup", end);
+  grid.addEventListener("pointercancel", e => { if (drag?.moved) drag.el.classList.remove("dragging"), (drag.el.style.transform = ""); end(e); });
+  grid.addEventListener("contextmenu", e => { if (editing) e.preventDefault(); });
+  // Langes Drücken auf freie Fläche oder Kopfzeile startet das Anordnen
+  let t0;
+  const arm = e => { if (editing || (e.target !== grid && !e.target.closest("header"))) return; t0 = setTimeout(() => setEditing(true), 700); };
+  [grid, document.querySelector("header")].forEach(n => { n.addEventListener("pointerdown", arm); ["pointerup", "pointerleave", "pointercancel", "pointermove"].forEach(ev => n.addEventListener(ev, () => clearTimeout(t0))); });
+})();
 
 function renderRooms() {
   const sup = [...states.values()].filter(supported);
@@ -670,6 +794,15 @@ function renderRooms() {
     b.addEventListener("click", () => { room = i.area_id; $("grid").scrollTop = 0; renderRooms(); renderGrid(); });
     return b;
   }));
+  const eb = h("button", "edit-btn", editing ? "Fertig" : "Anordnen"); eb.type = "button";
+  eb.addEventListener("click", () => setEditing(!editing));
+  const bar = [eb];
+  if (editing) {
+    const rb = h("button", "edit-btn ghost", "Zurücksetzen"); rb.type = "button";
+    rb.addEventListener("click", () => { delete layout[room]; saveLayout(); tiles.forEach(t => { t.el.style.gridColumn = t.el.style.gridRow = ""; }); renderGrid(); });
+    bar.unshift(rb);
+  }
+  $("editBar").replaceChildren(...bar);
 }
 
 function renderHeader() {

@@ -17,4 +17,8 @@ Eine Home-Assistant-Oberfläche im Stil eines Apple-Home-Displays. Läuft ohne B
 
 Räume, Geräte, Wetter und Energie-Messwerte werden automatisch aus Home Assistant gelesen. Tippen schaltet. Langes Drücken (oder „···“ auf der Kachel) öffnet alle Funktionen des Geräts: bei Lampen Helligkeit, Farbtemperatur, RGB-Farbe und Effekte, bei Heizung Betriebsart, Zieltemperatur, Programme und Lüfter, bei Rollos Position und Neigung, bei Mediaplayern Lautstärke, Quelle und Titelwechsel u. v. m. Angezeigt wird nur, was das Gerät laut Home Assistant unterstützt.
 
+## Anordnen
+
+Unten rechts auf „Anordnen“ tippen (oder lange auf freie Fläche / die Uhr drücken): Die Kacheln wackeln, lassen sich per Ziehen umsortieren, über das Größen-Symbol (1×1, 2×1, 2×2, 1×2) vergrößern und verkleinern und über „−“ ausblenden. Das Layout wird pro Raum im Browser des Displays gespeichert; „Zurücksetzen“ stellt den Standard wieder her.
+
 Unterstützt: Alarmanlagen (Code-Tastatur, Zuhause/Abwesend/Nacht/Urlaub), Kameras (Vorschau, Live-Bild per MJPEG, Ein/Aus), Szenen, Licht (inkl. RGB/Farbtemperatur/Effekte), Heizung, Schalter, Ventilator, Luftbefeuchter, Rollos, Schlösser, Mediaplayer, Staubsauger, Buttons, Zahlen- und Auswahlfelder (number/select, input_*), Sensoren und Binärsensoren. Geräte ohne Raum stehen unter „Weitere“.

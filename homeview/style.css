@@ -55,9 +55,8 @@ main:empty::after{content:"Keine Geräte in diesem Raum";color:var(--ink-2);font
 .tile.on{background:var(--glass-on);color:var(--on-ink)}
 .tile.on .state{color:rgba(28,28,30,.62)}
 .tile.unavailable{opacity:.45;pointer-events:none}
-.tile.wide{grid-column:span 2}
-.tile.tall{grid-row:span 2}
-@media (max-width:20rem){.tile.wide{grid-column:span 1}}
+.tile{container-type:size}
+@media (max-width:20rem){.tile{grid-column:span 1!important}}
 
 /* Heizung */
 .climate{align-items:center;justify-content:center;gap:.6rem;text-align:center;cursor:default}
@@ -153,5 +152,50 @@ button.primary{background:#fff!important;color:var(--on-ink)}
 .keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:.6rem;width:min(18rem,100%);margin:0 auto}
 .keypad button{border:0;border-radius:1.2rem;padding:.9rem 0;font-size:1.6rem;background:rgba(255,255,255,.14);cursor:pointer}
 .textin{font:inherit;font-size:1.3rem;padding:.8rem 1rem;border-radius:1rem;border:0;background:rgba(0,0,0,.28);color:#fff;user-select:auto}
+/* Größenstufen: Inhalt passt sich der Kachelgröße an */
+@container (max-height:10rem){
+  .climate .name,.climate .state{display:none}
+  .climate .dial{width:4.4rem}.climate .dial .val{font-size:1.4rem}
+  .climate .stepper button{width:2.2rem;height:2.2rem;font-size:1.4rem}
+}
+@container (max-width:14rem){
+  .media{flex-direction:column;align-items:flex-start;justify-content:space-between}
+  .media .cover{width:3.4rem;height:3.4rem}
+  .metric .big{font-size:2rem}
+}
+@container (min-width:20rem) and (min-height:17rem){
+  .tile:not(.camera):not(.climate) .ic{width:4rem;height:4rem}
+  .tile:not(.camera):not(.climate) .name{font-size:2rem}
+  .tile:not(.camera):not(.climate) .state{font-size:1.5rem}
+  .climate .dial{width:12rem}.climate .dial .val{font-size:3.4rem}
+  .media .cover{width:9rem;height:9rem}
+  .metric .big{font-size:4.4rem}
+  .camera .name{font-size:1.8rem}
+}
+@container (min-height:17rem) and (max-width:14rem){
+  .climate .dial{width:8.4rem}.climate .name,.climate .state{display:block}
+}
+
+/* Anordnen */
+.edit-btn{border:0;border-radius:99px;padding:.6rem 1.3rem;font-size:1.3rem;font-weight:600;background:#fff;color:var(--on-ink);cursor:pointer;flex:none}
+.bar{display:flex;align-items:center;gap:1rem;min-width:0}
+.bar nav{flex:1;min-width:0}
+.editbar{display:flex;gap:.5rem;flex:none}
+.edit-btn.ghost{background:rgba(255,255,255,.18);color:#fff}
+.editing .tile{animation:jig .3s ease-in-out infinite alternate;cursor:grab;touch-action:none}
+.editing .tile:nth-child(2n){animation-direction:alternate-reverse;animation-duration:.26s}
+.editing .tile *{pointer-events:none}
+.editing .tile .more{display:none}
+.editing main{touch-action:none}
+.editing .tile.dragging{animation:none;z-index:6;transition:none;box-shadow:0 18px 40px rgba(0,0,0,.45),inset 0 0 0 1px rgba(255,255,255,.2);pointer-events:none;cursor:grabbing}
+.tile.is-hidden{opacity:.35}
+@keyframes jig{from{rotate:-.7deg}to{rotate:.7deg}}
+.edit-ctrl{position:absolute;inset:0;pointer-events:none;z-index:2}
+.ec-hide,.ec-size{position:absolute;display:grid;place-items:center;background:rgba(20,18,32,.82);color:#fff;font-weight:700;box-shadow:0 0 0 1px rgba(255,255,255,.25)}
+.ec-hide{top:.5rem;right:.5rem;width:2.2rem;height:2.2rem;border-radius:50%;font-size:1.5rem;line-height:1}
+.ec-size{bottom:.5rem;right:.5rem;height:2.1rem;padding:0 .8rem;border-radius:99px;font-size:1.1rem}
+.editing .tile .state,.editing .tile .name{text-shadow:none}
+
 .banner{position:fixed;top:.8rem;left:50%;transform:translateX(-50%);z-index:9;padding:.5rem 1.2rem;border-radius:99px;background:rgba(0,0,0,.6);font-size:1.1rem}
-@media (prefers-reduced-motion:reduce){.tile.alert{animation:none}.bars i{animation:none;height:70%}.tile{transition:none}}
+@media (prefers-reduced-motion:reduce){.editing .tile{animation:none}.tile.alert{animation:none}.bars i{animation:none;height:70%}.tile{transition:none}}
+.editing .climate .name{padding-right:2.4rem}
