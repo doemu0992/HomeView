@@ -1,32 +1,50 @@
 <!doctype html>
 <html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HomeView Prüfseite</title>
-<style>body{font:16px/1.5 system-ui,sans-serif;margin:0;padding:16px;background:#fff;color:#111}h1{font-size:20px}pre{white-space:pre-wrap;background:#f2f2f2;padding:12px;border-radius:8px}.ok{color:#0a7a2f}.bad{color:#b3261e;font-weight:700}</style></head>
-<body><h1>HomeView Prüfseite</h1><p>Mache einen Screenshot dieser Seite und schicke ihn.</p><pre id="out">Prüfe …</pre>
+<style>body{font:15px/1.45 system-ui,sans-serif;margin:0;padding:14px;background:#fff;color:#111}h1{font-size:19px;margin:0 0 4px}pre{white-space:pre-wrap;background:#f2f2f2;padding:10px;border-radius:8px;margin:8px 0;font-size:13px}iframe{width:100%;height:240px;border:1px solid #bbb;border-radius:8px;background:#fff}</style></head>
+<body><h1>HomeView Prüfseite (Version 2)</h1><p style="margin:0">Warte 6 Sekunden, dann Screenshot der ganzen Seite senden.</p>
+<home-assistant id="proxy"></home-assistant>
+<pre id="out">Prüfe …</pre>
+<iframe id="hv" title="HomeView Test"></iframe>
 <script>
 (async function () {
   const out = document.getElementById("out"), L = [];
-  const say = (ok, t) => L.push((ok ? "OK    " : "FEHLT ") + t);
-  L.push("Browser: " + navigator.userAgent, "Adresse: " + location.href, "");
-  try { new Function("var a=0;a||=1;a??=2;return a?.b"); say(true, "moderne Schreibweise (||=, ??=, ?.)"); } catch (e) { say(false, "moderne Schreibweise: " + e.message); }
-  say("replaceChildren" in Element.prototype, "replaceChildren");
-  say(window.CSS && CSS.supports("container-type", "size"), "CSS Container Queries");
-  say(window.CSS && CSS.supports("aspect-ratio", "1"), "CSS aspect-ratio");
-  say(window.CSS && CSS.supports("backdrop-filter", "blur(1px)") || CSS.supports("-webkit-backdrop-filter", "blur(1px)"), "backdrop-filter");
+  const flush = () => { out.textContent = L.join("\n"); };
+  L.push("Browser: " + navigator.userAgent);
+  L.push("Adresse: " + location.href);
+  let real = null;
+  try { real = window.parent !== window ? window.parent.document.querySelector("home-assistant") : null; } catch (e) { L.push("Zugriff aufs Dashboard blockiert: " + e.name); }
+  L.push(real ? "Dashboard: gefunden, hass " + (real.hass ? "vorhanden" : "FEHLT") : "Dashboard: nicht gefunden (direkter Aufruf oder blockiert)");
+  if (real && real.hass) {
+    const H = real.hass, dom = {};
+    Object.keys(H.states || {}).forEach(id => { const d = id.split(".")[0]; dom[d] = (dom[d] || 0) + 1; });
+    L.push("hass.states: " + Object.keys(H.states || {}).length + " | areas: " + Object.keys(H.areas || {}).length + " | entities: " + Object.keys(H.entities || {}).length + " | devices: " + Object.keys(H.devices || {}).length);
+    L.push("Domänen: " + Object.entries(dom).sort((a, b) => b[1] - a[1]).slice(0, 12).map(x => x.join("=")).join(", "));
+    try { const r = await H.callWS({ type: "frontend/get_user_data", key: "homeview_layout" }); L.push("Layout im Profil: " + (r && r.value ? Object.keys(r.value).join(",") : "leer")); } catch (e) { L.push("Layout lesen fehlgeschlagen: " + (e && e.message || JSON.stringify(e))); }
+    Object.defineProperty(document.getElementById("proxy"), "hass", { get: () => real.hass });
+  }
   L.push("");
+  let text = "";
   try {
-    const ha = window.parent !== window ? window.parent.document.querySelector("home-assistant") : null;
-    L.push(ha && ha.hass ? "OK    Home-Assistant-Anmeldung vom Dashboard gefunden (kein Token nötig)" : "INFO  nicht in einem HA-Dashboard geöffnet (direkter Aufruf)");
-  } catch (e) { L.push("INFO  kein Zugriff auf das Dashboard (" + e.name + ")"); }
-  L.push("");
-  try {
-    const r = await fetch("/local/homeview.html", { cache: "no-store" });
-    const t = await r.text();
-    L.push("homeview.html: HTTP " + r.status + ", " + t.length + " Zeichen");
-    L.push(t.length > 80000 ? "OK    Größe passt (ca. 90 000 erwartet)" : "FEHLT Datei ist zu klein oder leer (ca. 90 000 Zeichen erwartet)");
-    L.push(/<\/html>\s*$/.test(t) ? "OK    Dateiende vollständig (</html>)" : "FEHLT Dateiende fehlt: die Datei wurde beim Einfügen abgeschnitten");
-    L.push("Anfang: " + JSON.stringify(t.slice(0, 60)));
-    L.push("Ende:   " + JSON.stringify(t.slice(-40)));
-  } catch (e) { L.push("FEHLT /local/homeview.html nicht erreichbar: " + e.message); }
-  out.textContent = L.join("\n");
+    const r = await fetch("/local/homeview.html", { cache: "no-store" }); text = await r.text();
+    L.push("homeview.html: HTTP " + r.status + ", " + text.length + " Zeichen, Ende " + (/<\/html>\s*$/.test(text) ? "ok" : "FEHLT"));
+    L.push("Boot-Meldung enthalten: " + text.includes("HomeView lädt") + " | Debug-Anzeige enthalten: " + text.includes("const DEBUG"));
+    const i = text.lastIndexOf("<script>"), j = text.lastIndexOf("<\/script>");
+    try { new Function(text.slice(i + 8, j)); L.push("Skript im Browser lesbar: ja"); } catch (e) { L.push("SYNTAXFEHLER im Browser: " + e.message); }
+  } catch (e) { L.push("homeview.html nicht erreichbar: " + e.message); }
+  flush();
+  const f = document.getElementById("hv");
+  f.src = "/local/homeview.html?t=" + Date.now() + "#debug=1";
+  setTimeout(() => {
+    L.push("", "--- HomeView im Test-Rahmen (nach 5 s) ---");
+    try {
+      const d = f.contentDocument, hid = id => { const e = d.getElementById(id); return e ? (e.hidden ? "versteckt" : "SICHTBAR") : "fehlt"; };
+      L.push("Seitenelemente: boot " + hid("boot") + ", setup " + hid("setup") + ", app " + hid("app"));
+      L.push("Kacheln: " + d.querySelectorAll("#grid .tile").length + " | Räume: " + d.querySelectorAll("#rooms button").length + " | Chips: " + d.querySelectorAll(".chip").length);
+      const fatal = d.getElementById("fatal"); if (fatal) L.push("FEHLER:\n" + fatal.textContent);
+      const dbg = d.getElementById("dbg"); L.push("Ablauf:\n" + (dbg ? dbg.textContent : "(keine Debug-Zeilen, Datei ist vermutlich eine alte Version)"));
+      L.push("Sichtbarer Text: " + JSON.stringify((d.body.innerText || "").replace(/\s+/g, " ").slice(0, 200)));
+    } catch (e) { L.push("Test-Rahmen nicht lesbar: " + e.message); }
+    flush();
+  }, 5000);
 })();
 </script></body></html>
