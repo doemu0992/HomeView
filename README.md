@@ -17,6 +17,21 @@ Eine Home-Assistant-Oberfläche im Stil eines Apple-Home-Displays. Läuft ohne B
 
 Räume, Geräte, Wetter und Energie-Messwerte werden automatisch aus Home Assistant gelesen. Tippen schaltet. Langes Drücken (oder „···“ auf der Kachel) öffnet alle Funktionen des Geräts: bei Lampen Helligkeit, Farbtemperatur, RGB-Farbe und Effekte, bei Heizung Betriebsart, Zieltemperatur, Programme und Lüfter, bei Rollos Position und Neigung, bei Mediaplayern Lautstärke, Quelle und Titelwechsel u. v. m. Angezeigt wird nur, was das Gerät laut Home Assistant unterstützt.
 
+## Einfachste Installation
+
+Nur die Datei `dist/homeview.html` (alles in einer) nach `/config/www/homeview.html` kopieren und im Dashboard per iframe einbinden, siehe unten.
+
+```yaml
+views:
+  - title: HomeView
+    path: homeview
+    panel: true
+    cards:
+      - type: iframe
+        url: /local/homeview.html
+        aspect_ratio: 100%
+```
+
 ## Anordnen
 
 Unten rechts auf „Anordnen“ tippen (oder lange auf freie Fläche / die Uhr drücken): Die Kacheln wackeln, lassen sich per Ziehen umsortieren, über das Größen-Symbol (1×1, 2×1, 2×2, 1×2) vergrößern und verkleinern und über „−“ ausblenden. Das Layout wird pro Raum im Browser des Displays gespeichert; „Zurücksetzen“ stellt den Standard wieder her.
