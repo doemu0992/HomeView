@@ -36,6 +36,10 @@ views:
         aspect_ratio: 100%
 ```
 
+## Zwischenspeicher
+
+Home Assistant liefert Dateien aus `/www` mit langer Cache-Zeit aus. Nach jedem Austausch von `homeview.html` die Zahl in `url: /local/homeview.html?v=3` erhöhen (und im Browser neu laden), sonst erscheint die alte Datei.
+
 ## Anmeldung
 
 Liegt `homeview.html` unter `/config/www/` und wird per iframe-Karte (`/local/homeview.html`) eingebunden, nutzt HomeView automatisch die Anmeldung des Dashboards: kein Token, keine Adresse. Beispiel: `dist/homeview-dashboard-lokal.yaml`.
