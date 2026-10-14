@@ -1287,6 +1287,7 @@ $("rooms").querySelector("[aria-current]")?.scrollIntoView({ inline: "nearest", 
 const mk = (txt, fn, cls = "") => { const b = h("button", "edit-btn " + cls, txt); b.type = "button"; b.addEventListener("click", fn); return b; };
 const bar = [];
 if (editing) {
+bar.push(mk(chipsOn() ? "Chips: An" : "Chips: Aus", () => { const c = cfgOf(); c.chips = !chipsOn(); saveLayout(); renderChips(); renderRooms(); }, "ghost"));
 bar.push(mk("Räume", openRoomManager, "ghost"));
 if (room !== OTHER) bar.push(mk("Geräte", openDevicePicker, "ghost"));
 bar.push(mk("Zurücksetzen", () => { delete layout[room]; saveLayout(); tiles.forEach(t => { t.el.style.gridColumn = t.el.style.gridRow = ""; }); renderGrid(); }, "ghost"));
@@ -1559,14 +1560,18 @@ sg.set(w.state);
 }
 setInterval(() => $("app").hidden || renderHeader(), 15000);
 /* ---------- Chips: Übersicht pro Raum (Temperatur, Feuchte, Lichter, Fenster, …) ---------- */
-const CHIPS_ON = typeof DEMO_ONLY !== "undefined" || new URLSearchParams(location.search).has("demo") || new URLSearchParams(location.hash.slice(1)).get("chips") === "1";
+/* Chips sind standardmäßig an. Aus: Adresse mit #chips=0 oder unter „Anordnen → Chips“. */
+const chipsOn = () => {
+if (/(^|[#&])chips=0/.test(location.hash)) return false;
+return !(layout.__cfg && layout.__cfg.chips === false);
+};
 const OUTDOOR = /außen|garten|terrasse|balkon|outdoor/i;
 const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
 let chipRaf = 0;
-const scheduleChips = () => { if (CHIPS_ON) { cancelAnimationFrame(chipRaf); chipRaf = requestAnimationFrame(renderChips); } };
+const scheduleChips = () => { cancelAnimationFrame(chipRaf); chipRaf = requestAnimationFrame(renderChips); };
 function renderChips() {
 const box = $("chips");
-if (!CHIPS_ON || $("app").hidden) { box.hidden = true; return; }
+if (!chipsOn() || $("app").hidden) { box.hidden = true; box.replaceChildren(); return; }
 const members = roomMembers(room).map(id => states.get(id));
 const inRoom = id => room === HOME || entityArea.get(id) === room || members.some(m => m.entity_id === id);
 const pool = room === HOME ? [...states.values()] : [...new Map([...members, ...[...states.values()].filter(s => entityArea.get(s.entity_id) === room)].map(s => [s.entity_id, s])).values()];

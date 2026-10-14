@@ -44,9 +44,9 @@ Home Assistant liefert Dateien aus `/www` mit langer Cache-Zeit aus. Nach jedem 
 
 Liegt `homeview.html` unter `/config/www/` und wird per iframe-Karte (`/local/homeview.html`) eingebunden, nutzt HomeView automatisch die Anmeldung des Dashboards: kein Token, keine Adresse. Beispiel: `dist/homeview-dashboard-lokal.yaml`.
 
-## Chips
+## Chips (standardmäßig an)
 
-Mit `#chips=1` an der Adresse zeigt jeder Raum oben eine Chip-Leiste (Temperatur, Luftfeuchte, Lichter, offene Fenster/Türen, Schlösser, Medien, Alarm, Energie).
+Jeder Raum zeigt oben eine Chip-Leiste (Temperatur, Luftfeuchte, Lichter, offene Fenster/Türen, Schlösser, Medien, Alarm, Energie). Ausschalten unter „Anordnen → Chips“ oder mit `#chips=0` an der Adresse.
 
 ## Kiosk-Modus
 
