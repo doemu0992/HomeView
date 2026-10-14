@@ -17,6 +17,10 @@ Eine Home-Assistant-Oberfläche im Stil eines Apple-Home-Displays. Läuft ohne B
 
 Räume, Geräte, Wetter und Energie-Messwerte werden automatisch aus Home Assistant gelesen. Tippen schaltet. Langes Drücken (oder „···“ auf der Kachel) öffnet alle Funktionen des Geräts: bei Lampen Helligkeit, Farbtemperatur, RGB-Farbe und Effekte, bei Heizung Betriebsart, Zieltemperatur, Programme und Lüfter, bei Rollos Position und Neigung, bei Mediaplayern Lautstärke, Quelle und Titelwechsel u. v. m. Angezeigt wird nur, was das Gerät laut Home Assistant unterstützt.
 
+## Nur YAML (ohne Datei)
+
+`dist/homeview-dashboard.yaml` komplett in den Raw-Konfigurationseditor eines neuen Dashboards einfügen und am Ende der `url` die HA-Adresse und das Token eintragen. Das Layout wird dann im Home-Assistant-Benutzerprofil gespeichert.
+
 ## Einfachste Installation
 
 Nur die Datei `dist/homeview.html` (alles in einer) nach `/config/www/homeview.html` kopieren und im Dashboard per iframe einbinden, siehe unten.

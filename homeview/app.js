@@ -654,7 +654,8 @@ function visibleIds() {
 const LAYOUT_KEY = "homeview.layout";
 let layout = {};
 try { layout = JSON.parse(localStorage.getItem(LAYOUT_KEY)) || {}; } catch {}
-const saveLayout = () => { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); } catch {} };
+let remoteSave = null;   // speichert das Layout zusätzlich im Home-Assistant-Benutzerprofil
+const saveLayout = () => { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); } catch {} remoteSave && remoteSave(); };
 const roomLayout = () => (layout[room] ||= { order: [], size: {}, hidden: [] });
 const SIZES = ["1x1", "2x1", "2x2", "1x2"];
 function defaultSize(id) {
@@ -829,11 +830,17 @@ function showApp() {
 function startLive({ url, token }) {
   haBase = url.replace(/\/+$/, "");
   conn = connectHA(url, token, {
-    onAuthError() { localStorage.removeItem(STORE); $("app").hidden = true; $("setup").hidden = false; $("err").textContent = "Token wurde abgelehnt. Bitte neu eingeben."; },
+    onAuthError() { try { localStorage.removeItem(STORE); } catch {} $("app").hidden = true; $("setup").hidden = false; $("err").textContent = "Token wurde abgelehnt. Bitte neu eingeben."; },
     onStatus(ok) { $("banner").hidden = ok; },
     async onReady(api) {
       try {
         await loadRegistry(api);
+        try {
+          const r = await api.request({ type: "frontend/get_user_data", key: "homeview_layout" });
+          if (r && r.value && typeof r.value === "object") layout = r.value;
+        } catch {}
+        let lt;
+        remoteSave = () => { clearTimeout(lt); lt = setTimeout(() => api.request({ type: "frontend/set_user_data", key: "homeview_layout", value: layout }).catch(() => {}), 400); };
         await api.subscribe();
         $("banner").hidden = true;
         tiles.clear(); closeSheet();
@@ -856,7 +863,7 @@ $("setupForm").addEventListener("submit", e => {
   e.preventDefault();
   $("err").textContent = "";
   const url = $("url").value.trim(), token = $("token").value.trim();
-  localStorage.setItem(STORE, JSON.stringify({ url, token }));
+  try { localStorage.setItem(STORE, JSON.stringify({ url, token })); } catch {}
   conn && conn.close();
   startLive({ url, token });
 });
@@ -965,6 +972,9 @@ function startDemo() {
 
 (function init() {
   if (typeof DEMO_ONLY !== "undefined" || new URLSearchParams(location.search).has("demo")) return startDemo();
+  // Zugangsdaten aus der Adresse (#url=…&token=…), z. B. wenn HomeView als iframe eingebettet ist
+  const hp = new URLSearchParams(location.hash.slice(1));
+  if (hp.get("url") && hp.get("token")) return startLive({ url: hp.get("url"), token: hp.get("token") });
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(STORE)); } catch {}
   $("url").value = saved?.url || (location.protocol.startsWith("http") && location.port === "8123" ? location.origin : "");
