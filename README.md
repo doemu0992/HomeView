@@ -36,6 +36,10 @@ views:
         aspect_ratio: 100%
 ```
 
+## Kiosk-Modus
+
+Der Knopf „Kiosk“ oben rechts startet den Vollbildmodus und blendet Bearbeiten-Elemente aus. Beenden: Uhrzeit 2 Sekunden gedrückt halten (oder Esc). Mit `&kiosk=1` am Ende der Adresse startet die Anzeige direkt im Kiosk-Modus (ohne Vollbild, das braucht einen Tipp).
+
 ## Räume und Geräte bearbeiten
 
 Im Anordnen-Modus: „+ Raum“ legt einen Raum an, „Raum bearbeiten“ benennt, verschiebt, blendet aus oder löscht ihn, „Geräte“ wählt frei aus, welche Geräte in einem Raum erscheinen (ein Gerät kann in mehreren Räumen sein).

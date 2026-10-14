@@ -15,7 +15,7 @@
       <div class="time" id="time">--:--</div>
       <div class="date" id="date"></div>
     </div>
-    <div class="wx" id="wx"></div>
+    <div class="hright"><div class="wx" id="wx"></div><button id="kioskBtn" type="button" class="kiosk-btn" aria-label="Kiosk-Modus starten"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>Kiosk</button></div>
   </header>
   <main id="grid" aria-live="polite"></main>
   <div class="bar"><nav id="rooms" aria-label="Räume"></nav><div class="editbar" id="editBar"></div></div>
@@ -50,6 +50,7 @@
   </div>
 </div>
 
+<div class="toast" id="toast" role="status" hidden></div>
 <div class="banner" id="banner" hidden>Verbindung getrennt – verbinde neu …</div>
 <script src="app.js"></script>
 </body>

@@ -828,7 +828,7 @@ function renderGrid() {
   grid.addEventListener("contextmenu", e => { if (editing) e.preventDefault(); });
   // Langes Drücken auf freie Fläche oder Kopfzeile startet das Anordnen
   let t0;
-  const arm = e => { if (editing || (e.target !== grid && !e.target.closest("header"))) return; t0 = setTimeout(() => setEditing(true), 700); };
+  const arm = e => { if (editing || kiosk || (e.target !== grid && !e.target.closest("header"))) return; t0 = setTimeout(() => setEditing(true), 700); };
   [grid, document.querySelector("header")].forEach(n => { n.addEventListener("pointerdown", arm); ["pointerup", "pointerleave", "pointercancel", "pointermove"].forEach(ev => n.addEventListener(ev, () => clearTimeout(t0))); });
 })();
 
@@ -973,10 +973,45 @@ function renderHeader() {
 }
 setInterval(() => $("app").hidden || renderHeader(), 15000);
 
+/* ---------- Kiosk-Modus ---------- */
+let kiosk = false, fsActive = false, toastTimer;
+function toast(msg, ms = 5000) {
+  const t = $("toast"); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, ms);
+}
+async function setKiosk(on, { fullscreen = true } = {}) {
+  if (on === kiosk) return;
+  kiosk = on; $("app").classList.toggle("kiosk", on);
+  $("kioskBtn").setAttribute("aria-label", on ? "Kiosk-Modus beenden" : "Kiosk-Modus starten");
+  if (on) {
+    if (editing) setEditing(false);
+    closeSheet();
+    let fsOk = false;
+    if (fullscreen && document.documentElement.requestFullscreen) {
+      try { await document.documentElement.requestFullscreen(); fsOk = true; fsActive = true; } catch {}
+    }
+    toast(fsOk || !fullscreen ? "Kiosk aktiv · zum Beenden die Uhrzeit 2 Sekunden gedrückt halten"
+      : "Kiosk aktiv, aber der Browser erlaubt hier kein Vollbild. Zum Beenden die Uhrzeit 2 Sekunden gedrückt halten.", 7000);
+  } else {
+    fsActive = false;
+    if (document.fullscreenElement) { try { await document.exitFullscreen(); } catch {} }
+    $("toast").hidden = true;
+  }
+}
+$("kioskBtn").addEventListener("click", () => setKiosk(true));
+document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && kiosk && fsActive) setKiosk(false); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && !$("app").hidden) { try { navigator.wakeLock?.request("screen").catch(() => {}); } catch {} } });
+(function exitGesture() {
+  let t; const el = $("time");
+  el.addEventListener("pointerdown", () => { if (kiosk) t = setTimeout(() => setKiosk(false), 2000); });
+  ["pointerup", "pointerleave", "pointercancel"].forEach(ev => el.addEventListener(ev, () => clearTimeout(t)));
+})();
+
 /* ---------- Start ---------- */
 function showApp() {
   $("setup").hidden = true; $("app").hidden = false;
   renderHeader(); renderRooms(); renderGrid();
+  if (new URLSearchParams(location.hash.slice(1)).get("kiosk") === "1") setKiosk(true, { fullscreen: false });
   try { navigator.wakeLock?.request("screen").catch(() => {}); } catch {}
 }
 

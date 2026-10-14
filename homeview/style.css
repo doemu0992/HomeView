@@ -211,6 +211,12 @@ button.primary{background:#fff!important;color:var(--on-ink)}
 .pick-name{font-size:1.2rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pick-id{font-size:.95rem;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:14rem}
 .actions .danger{background:rgba(255,69,58,.35)}
+/* Kiosk */
+.hright{display:flex;flex-direction:column;align-items:flex-end;gap:.7rem}
+.kiosk-btn{display:inline-flex;align-items:center;gap:.5rem;border:0;border-radius:99px;padding:.5rem 1rem;font-size:1.1rem;font-weight:600;background:rgba(255,255,255,.16);cursor:pointer}
+.kiosk .kiosk-btn,.kiosk .editbar{display:none}
+.kiosk,.kiosk *{cursor:none!important}
+.toast{position:fixed;left:50%;bottom:5.5rem;transform:translateX(-50%);z-index:9;max-width:min(36rem,calc(100% - 2rem));text-align:center;padding:.8rem 1.4rem;border-radius:1.4rem;background:rgba(20,18,32,.9);font-size:1.15rem;box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)}
 .banner{position:fixed;top:.8rem;left:50%;transform:translateX(-50%);z-index:9;padding:.5rem 1.2rem;border-radius:99px;background:rgba(0,0,0,.6);font-size:1.1rem}
 @media (prefers-reduced-motion:reduce){.editing .tile{animation:none}.tile.alert{animation:none}.bars i{animation:none;height:70%}.tile{transition:none}}
 .editing .climate .name{padding-right:2.4rem}
