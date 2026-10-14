@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HomeView Prüfseite</title>
+<style>body{font:16px/1.5 system-ui,sans-serif;margin:0;padding:16px;background:#fff;color:#111}h1{font-size:20px}pre{white-space:pre-wrap;background:#f2f2f2;padding:12px;border-radius:8px}.ok{color:#0a7a2f}.bad{color:#b3261e;font-weight:700}</style></head>
+<body><h1>HomeView Prüfseite</h1><p>Mache einen Screenshot dieser Seite und schicke ihn.</p><pre id="out">Prüfe …</pre>
+<script>
+(async function () {
+  const out = document.getElementById("out"), L = [];
+  const say = (ok, t) => L.push((ok ? "OK    " : "FEHLT ") + t);
+  L.push("Browser: " + navigator.userAgent, "Adresse: " + location.href, "");
+  try { new Function("var a=0;a||=1;a??=2;return a?.b"); say(true, "moderne Schreibweise (||=, ??=, ?.)"); } catch (e) { say(false, "moderne Schreibweise: " + e.message); }
+  say("replaceChildren" in Element.prototype, "replaceChildren");
+  say(window.CSS && CSS.supports("container-type", "size"), "CSS Container Queries");
+  say(window.CSS && CSS.supports("aspect-ratio", "1"), "CSS aspect-ratio");
+  say(window.CSS && CSS.supports("backdrop-filter", "blur(1px)") || CSS.supports("-webkit-backdrop-filter", "blur(1px)"), "backdrop-filter");
+  L.push("");
+  try {
+    const ha = window.parent !== window ? window.parent.document.querySelector("home-assistant") : null;
+    L.push(ha && ha.hass ? "OK    Home-Assistant-Anmeldung vom Dashboard gefunden (kein Token nötig)" : "INFO  nicht in einem HA-Dashboard geöffnet (direkter Aufruf)");
+  } catch (e) { L.push("INFO  kein Zugriff auf das Dashboard (" + e.name + ")"); }
+  L.push("");
+  try {
+    const r = await fetch("/local/homeview.html", { cache: "no-store" });
+    const t = await r.text();
+    L.push("homeview.html: HTTP " + r.status + ", " + t.length + " Zeichen");
+    L.push(t.length > 80000 ? "OK    Größe passt (ca. 90 000 erwartet)" : "FEHLT Datei ist zu klein oder leer (ca. 90 000 Zeichen erwartet)");
+    L.push(/<\/html>\s*$/.test(t) ? "OK    Dateiende vollständig (</html>)" : "FEHLT Dateiende fehlt: die Datei wurde beim Einfügen abgeschnitten");
+    L.push("Anfang: " + JSON.stringify(t.slice(0, 60)));
+    L.push("Ende:   " + JSON.stringify(t.slice(-40)));
+  } catch (e) { L.push("FEHLT /local/homeview.html nicht erreichbar: " + e.message); }
+  out.textContent = L.join("\n");
+})();
+</script></body></html>

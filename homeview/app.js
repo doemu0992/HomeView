@@ -1,4 +1,14 @@
 "use strict";
+/* Fehler sichtbar machen, statt einen leeren Bildschirm zu zeigen */
+(function () {
+  const show = msg => {
+    let b = document.getElementById("fatal");
+    if (!b) { b = document.createElement("pre"); b.id = "fatal"; b.style.cssText = "position:fixed;left:0;right:0;bottom:0;max-height:45%;overflow:auto;margin:0;padding:12px 16px;background:#b3261e;color:#fff;font:12px/1.4 monospace;z-index:99;white-space:pre-wrap"; document.body.append(b); }
+    b.textContent += msg + "\n";
+  };
+  window.addEventListener("error", e => show("Fehler: " + e.message + (e.lineno ? " (Zeile " + e.lineno + ")" : "")));
+  window.addEventListener("unhandledrejection", e => show("Fehler: " + (e.reason && e.reason.message || e.reason)));
+})();
 /* HomeView – Home-Assistant-Frontend im Stil eines Apple-Home-Displays.
    Kein Build-Schritt: spricht direkt die WebSocket-API von Home Assistant.
    Tippen schaltet, langes Drücken (oder „···“) öffnet alle Funktionen des Geräts. */
@@ -636,8 +646,8 @@ const showOnHome = s => HOME_DOMAINS.has(domainOf(s.entity_id)) || (domainOf(s.e
 
 /* ---------- Räume & Gerätezuordnung ---------- */
 const cfgOf = () => {
-  const c = (layout.__cfg ||= {});
-  c.order ||= []; c.names ||= {}; c.hidden ||= []; c.custom ||= []; c.add ||= {}; c.remove ||= {};
+  const c = layout.__cfg = layout.__cfg || {};
+  c.order = c.order || []; c.names = c.names || {}; c.hidden = c.hidden || []; c.custom = c.custom || []; c.add = c.add || {}; c.remove = c.remove || {};
   return c;
 };
 const rankOf = s => ORDER.indexOf(domainOf(s.entity_id));
@@ -664,7 +674,7 @@ function roomMembers(rid) {
 }
 function toggleMember(rid, id) {
   const c = cfgOf(), base = new Set(baseMembers(rid));
-  const add = (c.add[rid] ||= []), rem = (c.remove[rid] ||= []);
+  const add = (c.add[rid] = c.add[rid] || []), rem = (c.remove[rid] = c.remove[rid] || []);
   if (roomMembers(rid).includes(id)) {
     if (base.has(id) && !rem.includes(id)) rem.push(id);
     const i = add.indexOf(id); if (i >= 0) add.splice(i, 1);
@@ -706,7 +716,7 @@ let layout = {};
 try { layout = JSON.parse(localStorage.getItem(LAYOUT_KEY)) || {}; } catch {}
 let remoteSave = null;   // speichert das Layout zusätzlich im Home-Assistant-Benutzerprofil
 const saveLayout = () => { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); } catch {} remoteSave && remoteSave(); };
-const roomLayout = () => (layout[room] ||= { order: [], size: {}, hidden: [] });
+const roomLayout = () => (layout[room] = layout[room] || { order: [], size: {}, hidden: [] });
 const SIZES = ["1x1", "2x1", "2x2", "1x2"];
 function defaultSize(id) {
   const s = states.get(id), d = domainOf(id);
