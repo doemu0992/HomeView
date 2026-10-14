@@ -1078,8 +1078,12 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden && !$
 })();
 
 /* ---------- Start ---------- */
+function showSetup(msg) {
+  $("boot").hidden = true; $("app").hidden = true; $("setup").hidden = false;
+  if (msg) $("err").textContent = msg;
+}
 function showApp() {
-  $("setup").hidden = true; $("app").hidden = false;
+  $("boot").hidden = true; $("setup").hidden = true; $("app").hidden = false;
   renderHeader(); renderRooms(); renderGrid();
   if (new URLSearchParams(location.hash.slice(1)).get("kiosk") === "1") setKiosk(true, { fullscreen: false });
   try { navigator.wakeLock?.request("screen").catch(() => {}); } catch {}
@@ -1142,7 +1146,7 @@ async function startParent(ha) {
 function startLive({ url, token }) {
   haBase = url.replace(/\/+$/, "");
   conn = connectHA(url, token, {
-    onAuthError() { try { localStorage.removeItem(STORE); } catch {} $("app").hidden = true; $("setup").hidden = false; $("err").textContent = "Token wurde abgelehnt. Bitte neu eingeben."; },
+    onAuthError() { try { localStorage.removeItem(STORE); } catch {} showSetup("Token wurde abgelehnt. Bitte neu eingeben."); },
     onStatus(ok) { $("banner").hidden = ok; },
     async onReady(api) {
       try {
@@ -1273,8 +1277,11 @@ function startDemo() {
 }
 
 (function init() {
+  const isDemo = typeof DEMO_ONLY !== "undefined" || new URLSearchParams(location.search).has("demo");
+  // Wenn nach 8 Sekunden nichts erscheint, Formular mit Hinweis zeigen statt leerem Bild
+  if (!isDemo) setTimeout(() => { if ($("app").hidden && $("setup").hidden) showSetup("Keine Verbindung zu Home Assistant. Bitte Adresse und Token prüfen."); }, 8000);
   const ph = parentHA();
-  if (ph && typeof DEMO_ONLY === "undefined" && !new URLSearchParams(location.search).has("demo")) return startParent(ph);
+  if (ph && !isDemo) return startParent(ph).catch(e => showSetup("Anmeldung über das Dashboard fehlgeschlagen (" + (e && e.message || e) + "). Bitte Adresse und Token eingeben."));
   if (typeof DEMO_ONLY !== "undefined" || new URLSearchParams(location.search).has("demo")) return startDemo();
   // Zugangsdaten aus der Adresse (#url=…&token=…), z. B. wenn HomeView als iframe eingebettet ist
   const hp = new URLSearchParams(location.hash.slice(1));
@@ -1283,5 +1290,6 @@ function startDemo() {
   try { saved = JSON.parse(localStorage.getItem(STORE)); } catch {}
   $("url").value = saved?.url || (location.protocol.startsWith("http") && location.port === "8123" ? location.origin : "");
   if (saved?.url && saved?.token) startLive(saved);
+  else showSetup();
 })();
 $("demoBtn").addEventListener("click", startDemo);

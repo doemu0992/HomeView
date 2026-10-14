@@ -15,6 +15,7 @@
 font-size:clamp(11px, calc(min(100vw, 150vh) / 60), 26px);
 }
 *{box-sizing:border-box;margin:0}
+html{background:#1a1230}
 html,body{height:100%;overflow:hidden;overscroll-behavior:none}
 body{
 color:var(--ink); -webkit-font-smoothing:antialiased; -webkit-tap-highlight-color:transparent; user-select:none;
@@ -230,6 +231,7 @@ background:var(--glass);backdrop-filter:blur(28px) saturate(1.6);-webkit-backdro
 .editing .climate .name{padding-right:2.4rem}
 #pickSearch{position:sticky;top:0;z-index:2;background:#17142a;box-shadow:0 .6rem .6rem #1e1b33}
 .editing .tile.unavailable{pointer-events:auto;opacity:.6}
+.boot{position:fixed;inset:0;display:grid;place-items:center;font-size:1.6rem;color:rgba(255,255,255,.8);z-index:4}
 </style>
 </head>
 <body>
@@ -246,7 +248,9 @@ background:var(--glass);backdrop-filter:blur(28px) saturate(1.6);-webkit-backdro
   <div class="bar"><nav id="rooms" aria-label="Räume"></nav><div class="editbar" id="editBar"></div></div>
 </div>
 
-<div class="setup" id="setup">
+<div class="boot" id="boot">HomeView lädt …</div>
+<noscript><div class="boot">JavaScript ist deaktiviert.</div></noscript>
+<div class="setup" id="setup" hidden>
   <form id="setupForm">
     <h1>HomeView verbinden</h1>
     <label>Adresse von Home Assistant
@@ -1310,8 +1314,12 @@ el.addEventListener("pointerdown", () => { if (kiosk) t = setTimeout(() => setKi
 ["pointerup", "pointerleave", "pointercancel"].forEach(ev => el.addEventListener(ev, () => clearTimeout(t)));
 })();
 /* ---------- Start ---------- */
+function showSetup(msg) {
+$("boot").hidden = true; $("app").hidden = true; $("setup").hidden = false;
+if (msg) $("err").textContent = msg;
+}
 function showApp() {
-$("setup").hidden = true; $("app").hidden = false;
+$("boot").hidden = true; $("setup").hidden = true; $("app").hidden = false;
 renderHeader(); renderRooms(); renderGrid();
 if (new URLSearchParams(location.hash.slice(1)).get("kiosk") === "1") setKiosk(true, { fullscreen: false });
 try { navigator.wakeLock?.request("screen").catch(() => {}); } catch {}
@@ -1371,7 +1379,7 @@ Object.values(H.states).forEach(n => { const o = states.get(n.entity_id); if (o 
 function startLive({ url, token }) {
 haBase = url.replace(/\/+$/, "");
 conn = connectHA(url, token, {
-onAuthError() { try { localStorage.removeItem(STORE); } catch {} $("app").hidden = true; $("setup").hidden = false; $("err").textContent = "Token wurde abgelehnt. Bitte neu eingeben."; },
+onAuthError() { try { localStorage.removeItem(STORE); } catch {} showSetup("Token wurde abgelehnt. Bitte neu eingeben."); },
 onStatus(ok) { $("banner").hidden = ok; },
 async onReady(api) {
 try {
@@ -1497,8 +1505,11 @@ conn = { close() {}, call(domain, service, data, id) { const r = (SVC[`${domain}
 showApp();
 }
 (function init() {
+const isDemo = typeof DEMO_ONLY !== "undefined" || new URLSearchParams(location.search).has("demo");
+// Wenn nach 8 Sekunden nichts erscheint, Formular mit Hinweis zeigen statt leerem Bild
+if (!isDemo) setTimeout(() => { if ($("app").hidden && $("setup").hidden) showSetup("Keine Verbindung zu Home Assistant. Bitte Adresse und Token prüfen."); }, 8000);
 const ph = parentHA();
-if (ph && typeof DEMO_ONLY === "undefined" && !new URLSearchParams(location.search).has("demo")) return startParent(ph);
+if (ph && !isDemo) return startParent(ph).catch(e => showSetup("Anmeldung über das Dashboard fehlgeschlagen (" + (e && e.message || e) + "). Bitte Adresse und Token eingeben."));
 if (typeof DEMO_ONLY !== "undefined" || new URLSearchParams(location.search).has("demo")) return startDemo();
 // Zugangsdaten aus der Adresse (#url=…&token=…), z. B. wenn HomeView als iframe eingebettet ist
 const hp = new URLSearchParams(location.hash.slice(1));
@@ -1507,6 +1518,7 @@ let saved = null;
 try { saved = JSON.parse(localStorage.getItem(STORE)); } catch {}
 $("url").value = saved?.url || (location.protocol.startsWith("http") && location.port === "8123" ? location.origin : "");
 if (saved?.url && saved?.token) startLive(saved);
+else showSetup();
 })();
 $("demoBtn").addEventListener("click", startDemo);
 </script>

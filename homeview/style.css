@@ -6,6 +6,7 @@
   font-size:clamp(11px, calc(min(100vw, 150vh) / 60), 26px);
 }
 *{box-sizing:border-box;margin:0}
+html{background:#1a1230}
 html,body{height:100%;overflow:hidden;overscroll-behavior:none}
 body{
   color:var(--ink); -webkit-font-smoothing:antialiased; -webkit-tap-highlight-color:transparent; user-select:none;
@@ -234,3 +235,5 @@ main{flex:1}
 .editing .climate .name{padding-right:2.4rem}
 #pickSearch{position:sticky;top:0;z-index:2;background:#17142a;box-shadow:0 .6rem .6rem #1e1b33}
 .editing .tile.unavailable{pointer-events:auto;opacity:.6}
+
+.boot{position:fixed;inset:0;display:grid;place-items:center;font-size:1.6rem;color:rgba(255,255,255,.8);z-index:4}
