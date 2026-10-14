@@ -577,6 +577,7 @@ const BUILDERS = {
       update(s) {
         if (shown !== s.attributes.entity_picture) { shown = s.attributes.entity_picture; load(s); }
         applyCommon(el, s, false, CAM[s.state] || s.state);
+        el.classList.toggle("live", s.state === "streaming" || s.state === "recording");
       }};
   },
   climate(id) {
@@ -619,6 +620,7 @@ const BUILDERS = {
       el.classList.toggle("unavailable", s.state === "unavailable");
       setText(el, ".name", nameOf(s));
       if (!pend) draw(at, off ? null : at.temperature != null ? { t: at.temperature } : at.target_temp_low != null ? { lo: at.target_temp_low, hi: at.target_temp_high } : at.current_temperature != null ? { t: at.current_temperature } : null);
+      el.classList.toggle("heating", at.hvac_action === "heating"); el.classList.toggle("cooling", at.hvac_action === "cooling");
       const act = HVAC_ACTION[at.hvac_action] || HVAC_MODE[s.state] || s.state;
       const cur = at.current_temperature != null ? ` · Jetzt ${fmt(at.current_temperature)}°` : "";
       setText(el, ".state", (off ? "Aus" : act) + cur);
@@ -1166,7 +1168,7 @@ function renderChips() {
     ...climates.filter(s => s.attributes.current_humidity != null).map(s => s.attributes.current_humidity)];
   if (hums.length) add("hum", "drop", Math.round(avg(hums)) + " %");
   const heating = dom("climate").filter(s => s.attributes.hvac_action === "heating");
-  if (heating.length) add("heat", "thermo", "Heizt", { cls: "active" });
+  if (heating.length) add("heat", "flame", "Heizt", { cls: "active" });
 
   const lights = dom("light"), lOn = lights.filter(s => s.state === "on");
   if (lights.length) add("lights", "light", lOn.length ? `${lOn.length} ${lOn.length === 1 ? "Licht" : "Lichter"} an` : "Lichter aus", {

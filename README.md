@@ -52,6 +52,10 @@ Mit `#chips=1` an der Adresse zeigt jeder Raum oben eine Chip-Leiste (Temperatur
 
 Der Knopf „Kiosk“ oben rechts startet den Vollbildmodus und blendet Bearbeiten-Elemente aus. Beenden: Uhrzeit 2 Sekunden gedrückt halten (oder Esc). Mit `&kiosk=1` am Ende der Adresse startet die Anzeige direkt im Kiosk-Modus (ohne Vollbild, das braucht einen Tipp).
 
+## Animierte Symbole
+
+Symbole bewegen sich passend zum Zustand: Ventilator/Staubsauger drehen sich, Lampen leuchten, Heizung und Flamme flackern, Türen und Fenster schwingen auf, offene Schlösser wackeln, Rollos gleiten, die Alarmanlage rüttelt bei Auslösung, ein roter Live-Punkt blinkt bei Kameras, der Heizungsring glüht beim Heizen (orange) oder Kühlen (blau). Pro Gerät abschaltbar (Anordnen → ✎ → Animation).
+
 ## Wetter
 
 Oben rechts zeigt HomeView das Wetter mit animiertem Symbol (Sonne, Wolken, Regen, Schnee, Gewitter, Nebel, Wind, Nacht). Antippen öffnet Details (Luftfeuchte, Wind, Luftdruck …), die Wahl der Wetterquelle (wenn mehrere Wetter-Integrationen vorhanden sind) und den Ortsnamen, z. B. „Bellach 4512“.

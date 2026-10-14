@@ -310,6 +310,28 @@ background:var(--glass);backdrop-filter:blur(28px) saturate(1.6);-webkit-backdro
 .wi .w-wind{animation:w-gust 2s ease-in-out infinite alternate}
 .wi .w-star{animation:w-twinkle 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
 @media (prefers-reduced-motion:reduce){.wi *{animation:none!important}}
+/* Weitere Symbol-Animationen */
+@keyframes hv-wiggle{0%,60%,100%{transform:rotate(0)}10%{transform:rotate(-12deg)}25%{transform:rotate(9deg)}40%{transform:rotate(-6deg)}50%{transform:rotate(3deg)}}
+@keyframes hv-swing{0%,100%{transform:scaleX(1)}50%{transform:scaleX(.6)}}
+@keyframes hv-breathe{50%{transform:scale(1.1)}}
+@keyframes hv-alarm{0%,100%{transform:rotate(0)}10%,30%,50%{transform:rotate(-13deg)}20%,40%,60%{transform:rotate(13deg)}}
+@keyframes hv-slide{50%{transform:translateY(.25rem)}}
+@keyframes hv-blink{50%{opacity:.2}}
+@keyframes hv-arc{50%{filter:drop-shadow(0 0 .4rem currentColor)}}
+.tile.on:not(.noanim) .ic{animation:hv-breathe 3.4s ease-in-out infinite}
+.tile:not(.on):not(.noanim) .ic[data-icon="lock"]{animation:hv-wiggle 4s ease-in-out infinite;transform-origin:50% 85%}
+.tile.on:not(.noanim) .ic[data-icon="door"],.tile.on:not(.noanim) .ic[data-icon="window"],.tile.on:not(.noanim) .ic[data-icon="garage"]{animation:hv-swing 2.4s ease-in-out infinite;transform-origin:15% 50%}
+.tile.on:not(.noanim) .ic[data-icon="cover"]{animation:hv-slide 2.8s ease-in-out infinite}
+.tile.alert .ic{animation:hv-alarm .6s linear infinite!important;transform-origin:50% 20%}
+.climate.heating .arc{stroke:#ffb340;color:#ffb340;animation:hv-arc 2.4s ease-in-out infinite}
+.climate.cooling .arc{stroke:#4aa3ff;color:#4aa3ff;animation:hv-arc 2.4s ease-in-out infinite}
+.camera.live .state::before{content:"● ";color:#ff453a;animation:hv-blink 1.3s ease-in-out infinite}
+.chip.active .ic[data-icon="light"],.chip.active .ic[data-icon="shield"]{animation:hv-glow 2.8s ease-in-out infinite}
+.chip.active .ic[data-icon="flame"]{animation:hv-flicker 1.4s ease-in-out infinite}
+.chip.active .ic[data-icon="media"]{animation:hv-pulse 1.8s ease-in-out infinite}
+.chip[data-kind="power"] .ic{animation:hv-pulse 2s ease-in-out infinite}
+.chip.warn .ic{animation:hv-wiggle 3s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.camera.live .state::before,.climate .arc,.chip .ic{animation:none!important}}
 </style>
 </head>
 <body>
@@ -913,6 +935,7 @@ return { el, refresh() { const s = states.get(id); if (s && s.state !== "unavail
 update(s) {
 if (shown !== s.attributes.entity_picture) { shown = s.attributes.entity_picture; load(s); }
 applyCommon(el, s, false, CAM[s.state] || s.state);
+el.classList.toggle("live", s.state === "streaming" || s.state === "recording");
 }};
 },
 climate(id) {
@@ -955,6 +978,7 @@ const at = s.attributes, off = s.state === "off";
 el.classList.toggle("unavailable", s.state === "unavailable");
 setText(el, ".name", nameOf(s));
 if (!pend) draw(at, off ? null : at.temperature != null ? { t: at.temperature } : at.target_temp_low != null ? { lo: at.target_temp_low, hi: at.target_temp_high } : at.current_temperature != null ? { t: at.current_temperature } : null);
+el.classList.toggle("heating", at.hvac_action === "heating"); el.classList.toggle("cooling", at.hvac_action === "cooling");
 const act = HVAC_ACTION[at.hvac_action] || HVAC_MODE[s.state] || s.state;
 const cur = at.current_temperature != null ? ` · Jetzt ${fmt(at.current_temperature)}°` : "";
 setText(el, ".state", (off ? "Aus" : act) + cur);
@@ -1482,7 +1506,7 @@ const hums = [...dom("sensor").filter(s => s.attributes.device_class === "humidi
 ...climates.filter(s => s.attributes.current_humidity != null).map(s => s.attributes.current_humidity)];
 if (hums.length) add("hum", "drop", Math.round(avg(hums)) + " %");
 const heating = dom("climate").filter(s => s.attributes.hvac_action === "heating");
-if (heating.length) add("heat", "thermo", "Heizt", { cls: "active" });
+if (heating.length) add("heat", "flame", "Heizt", { cls: "active" });
 const lights = dom("light"), lOn = lights.filter(s => s.state === "on");
 if (lights.length) add("lights", "light", lOn.length ? `${lOn.length} ${lOn.length === 1 ? "Licht" : "Lichter"} an` : "Lichter aus", {
 cls: lOn.length ? "active" : "",
