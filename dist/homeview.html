@@ -109,7 +109,7 @@ button.primary{background:#fff!important;color:var(--on-ink)}
 /* Detailfenster */
 .sheet{position:fixed;inset:0;z-index:8;display:grid;place-items:end center}
 .sheet-bg{position:absolute;inset:0;background:rgba(0,0,0,.5)}
-.sheet-card{position:relative;width:min(36rem,100%);max-height:88%;margin:1rem;padding:1.6rem;border-radius:2rem;display:grid;grid-template-rows:auto 1fr;gap:1rem;background:rgba(40,36,60,.88);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
+.sheet-card{position:relative;width:min(36rem,100%);max-height:calc(100vh - 2rem);min-height:0;margin:1rem;padding:1.6rem;border-radius:2rem;display:grid;grid-template-rows:auto 1fr;gap:1rem;background:rgba(40,36,60,.88);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
 .sheet-head{display:flex;justify-content:space-between;align-items:center;gap:1rem}
 .sheet-title{font-size:1.6rem;font-weight:600}
 #sheetClose{width:2.8rem;height:2.8rem;border-radius:50%;border:0;background:rgba(255,255,255,.18);cursor:pointer;font-size:1.2rem}
@@ -192,9 +192,25 @@ button.primary{background:#fff!important;color:var(--on-ink)}
 .ec-hide{top:.5rem;right:.5rem;width:2.2rem;height:2.2rem;border-radius:50%;font-size:1.5rem;line-height:1}
 .ec-size{bottom:.5rem;right:.5rem;height:2.1rem;padding:0 .8rem;border-radius:99px;font-size:1.1rem}
 .editing .tile .state,.editing .tile .name{text-shadow:none}
+/* Räume & Geräte wählen */
+.room-add{border:0;background:transparent;color:#fff;font-size:1.3rem;font-weight:600;padding:.6rem 1.2rem;border-radius:99px;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.45);cursor:pointer;flex:none;white-space:nowrap}
+.bar{flex-wrap:wrap}.bar nav{flex:1 1 18rem}
+.editbar{flex-wrap:wrap;justify-content:flex-end}
+.editing main:empty::after{content:"Tippe auf „Geräte“, um Geräte hinzuzufügen"}
+.sheet[data-kind=panel] .sheet-card{width:min(44rem,100%)}
+.picklist{display:grid;gap:.4rem}
+.pick-group{font-size:1.05rem;color:var(--ink-2);font-weight:600;padding:.8rem .2rem .2rem}
+.pick-row{display:grid;grid-template-columns:2.2rem 1fr auto;align-items:center;gap:.8rem;border:0;text-align:left;padding:.7rem .9rem;border-radius:1.1rem;background:rgba(255,255,255,.08);cursor:pointer;min-width:0}
+.pick-check{width:2rem;height:2rem;border-radius:50%;display:grid;place-items:center;box-shadow:inset 0 0 0 2px rgba(255,255,255,.35);color:transparent;font-size:1.2rem}
+.pick-row[aria-pressed="true"]{background:rgba(255,255,255,.18)}
+.pick-row[aria-pressed="true"] .pick-check{background:#fff;color:var(--on-ink);box-shadow:none}
+.pick-name{font-size:1.2rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pick-id{font-size:.95rem;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:14rem}
+.actions .danger{background:rgba(255,69,58,.35)}
 .banner{position:fixed;top:.8rem;left:50%;transform:translateX(-50%);z-index:9;padding:.5rem 1.2rem;border-radius:99px;background:rgba(0,0,0,.6);font-size:1.1rem}
 @media (prefers-reduced-motion:reduce){.editing .tile{animation:none}.tile.alert{animation:none}.bars i{animation:none;height:70%}.tile{transition:none}}
 .editing .climate .name{padding-right:2.4rem}
+#pickSearch{position:sticky;top:0;z-index:2;background:#17142a;box-shadow:0 .6rem .6rem #1e1b33}
 </style>
 </head>
 <body>
@@ -848,14 +864,62 @@ const ORDER = ["alarm_control_panel", "scene", "camera", "climate", "light", "sw
 const HOME_DOMAINS = new Set(["alarm_control_panel", "camera", "scene", "climate", "light", "switch", "input_boolean", "fan", "humidifier", "cover", "lock", "vacuum", "media_player"]);
 const supported = s => !!BUILDERS[domainOf(s.entity_id)];
 const showOnHome = s => HOME_DOMAINS.has(domainOf(s.entity_id)) || (domainOf(s.entity_id) === "sensor" && ["power", "energy"].includes(s.attributes.device_class));
+/* ---------- Räume & Gerätezuordnung ---------- */
+const cfgOf = () => {
+const c = (layout.__cfg ||= {});
+c.order ||= []; c.names ||= {}; c.hidden ||= []; c.custom ||= []; c.add ||= {}; c.remove ||= {};
+return c;
+};
+const rankOf = s => ORDER.indexOf(domainOf(s.entity_id));
+const byDefault = (a, b) => rankOf(a) - rankOf(b) || nameOf(a).localeCompare(nameOf(b), "de");
+const isCustomRoom = id => id.startsWith("c_");
+function baseMembers(rid) {
+const sup = [...states.values()].filter(supported);
+let list;
+if (rid === HOME) list = sup.filter(showOnHome);
+else if (rid === OTHER) {
+const assigned = new Set(Object.values(cfgOf().add).flat());
+list = sup.filter(s => !entityArea.has(s.entity_id) && !showOnHome(s) && !assigned.has(s.entity_id));
+} else if (isCustomRoom(rid)) list = [];
+else list = sup.filter(s => entityArea.get(s.entity_id) === rid);
+list.sort(byDefault);
+return list.slice(0, rid === HOME ? 40 : 300).map(s => s.entity_id);
+}
+function roomMembers(rid) {
+const c = cfgOf();
+const set = new Set(baseMembers(rid));
+(c.add[rid] || []).forEach(id => set.add(id));
+(c.remove[rid] || []).forEach(id => set.delete(id));
+return [...set].filter(id => states.has(id) && supported(states.get(id))).sort((x, y) => byDefault(states.get(x), states.get(y)));
+}
+function toggleMember(rid, id) {
+const c = cfgOf(), base = new Set(baseMembers(rid));
+const add = (c.add[rid] ||= []), rem = (c.remove[rid] ||= []);
+if (roomMembers(rid).includes(id)) {
+if (base.has(id) && !rem.includes(id)) rem.push(id);
+const i = add.indexOf(id); if (i >= 0) add.splice(i, 1);
+} else {
+const i = rem.indexOf(id); if (i >= 0) rem.splice(i, 1);
+if (!base.has(id) && !add.includes(id)) add.push(id);
+}
+saveLayout();
+}
+function roomList() {
+const c = cfgOf();
+const base = [{ id: HOME, name: "Zuhause" },
+...areas.filter(a => !c.hidden.includes(a.area_id)).map(a => ({ id: a.area_id, name: a.name })),
+...c.custom.map(x => ({ id: x.id, name: x.name }))];
+const list = base.filter(r => r.id === HOME || isCustomRoom(r.id) || roomMembers(r.id).length);
+if (baseMembers(OTHER).length) list.push({ id: OTHER, name: "Weitere" });
+list.forEach(r => { if (c.names[r.id]) r.name = c.names[r.id]; });
+const pos = new Map(c.order.map((id, i) => [id, i]));
+return list.map((r, i) => [r, i]).sort((x, y) => (pos.has(x[0].id) ? pos.get(x[0].id) : 1e6 + x[1]) - (pos.has(y[0].id) ? pos.get(y[0].id) : 1e6 + y[1])).map(x => x[0]);
+}
+function roomName(id) {
+return cfgOf().names[id] || (id === HOME ? "Zuhause" : id === OTHER ? "Weitere" : cfgOf().custom.find(x => x.id === id)?.name || areas.find(a => a.area_id === id)?.name || id);
+}
 function visibleIds() {
-let list = [...states.values()].filter(supported);
-if (room === HOME) list = list.filter(showOnHome);
-else if (room === OTHER) list = list.filter(s => !entityArea.has(s.entity_id));
-else list = list.filter(s => entityArea.get(s.entity_id) === room);
-const rank = s => ORDER.indexOf(domainOf(s.entity_id));
-list.sort((a, b) => rank(a) - rank(b) || nameOf(a).localeCompare(nameOf(b), "de"));
-let ids = list.slice(0, room === HOME ? 40 : 300).map(s => s.entity_id);
+let ids = roomMembers(room);
 const lay = layout[room];
 if (lay) {
 const pos = new Map(lay.order.map((id, i) => [id, i]));
@@ -994,26 +1058,125 @@ const arm = e => { if (editing || (e.target !== grid && !e.target.closest("heade
 [grid, document.querySelector("header")].forEach(n => { n.addEventListener("pointerdown", arm); ["pointerup", "pointerleave", "pointercancel", "pointermove"].forEach(ev => n.addEventListener(ev, () => clearTimeout(t0))); });
 })();
 function renderRooms() {
-const sup = [...states.values()].filter(supported);
-const withDevices = areas.filter(a => sup.some(s => entityArea.get(s.entity_id) === a.area_id));
-const items = [{ area_id: HOME, name: "Zuhause" }, ...withDevices];
-if (sup.some(s => !entityArea.has(s.entity_id) && !showOnHome(s))) items.push({ area_id: OTHER, name: "Weitere" });
-if (!items.some(i => i.area_id === room)) room = HOME;
-$("rooms").replaceChildren(...items.map(i => {
+const items = roomList();
+if (!items.some(i => i.id === room)) room = HOME;
+const pills = items.map(i => {
 const b = h("button", "", i.name); b.type = "button";
-if (i.area_id === room) b.setAttribute("aria-current", "true");
-b.addEventListener("click", () => { room = i.area_id; $("grid").scrollTop = 0; renderRooms(); renderGrid(); });
+if (i.id === room) b.setAttribute("aria-current", "true");
+b.addEventListener("click", () => { room = i.id; $("grid").scrollTop = 0; renderRooms(); renderGrid(); });
 return b;
-}));
-const eb = h("button", "edit-btn", editing ? "Fertig" : "Anordnen"); eb.type = "button";
-eb.addEventListener("click", () => setEditing(!editing));
-const bar = [eb];
+});
 if (editing) {
-const rb = h("button", "edit-btn ghost", "Zurücksetzen"); rb.type = "button";
-rb.addEventListener("click", () => { delete layout[room]; saveLayout(); tiles.forEach(t => { t.el.style.gridColumn = t.el.style.gridRow = ""; }); renderGrid(); });
-bar.unshift(rb);
+const add = h("button", "room-add", "+ Raum"); add.type = "button"; add.addEventListener("click", addRoom);
+pills.push(add);
 }
+$("rooms").replaceChildren(...pills);
+$("rooms").querySelector("[aria-current]")?.scrollIntoView({ inline: "nearest", block: "nearest" });
+const mk = (txt, fn, cls = "") => { const b = h("button", "edit-btn " + cls, txt); b.type = "button"; b.addEventListener("click", fn); return b; };
+const bar = [];
+if (editing) {
+bar.push(mk("Raum bearbeiten", openRoomPanel, "ghost"));
+if (room !== OTHER) bar.push(mk("Geräte", openDevicePicker, "ghost"));
+bar.push(mk("Zurücksetzen", () => { delete layout[room]; saveLayout(); tiles.forEach(t => { t.el.style.gridColumn = t.el.style.gridRow = ""; }); renderGrid(); }, "ghost"));
+}
+bar.push(mk(editing ? "Fertig" : "Anordnen", () => setEditing(!editing)));
 $("editBar").replaceChildren(...bar);
+}
+/* ---------- Fenster: Raum bearbeiten, Geräte wählen ---------- */
+function openPanel(title, build) {
+sheetCtx?.update.cleanup?.(); sheetCtx = null;
+const body = $("sheetBody"); body.replaceChildren();
+$("sheetTitle").textContent = title; $("sheet").dataset.kind = "panel";
+build(body);
+$("sheet").hidden = false;
+(body.querySelector("input") || $("sheetClose")).focus();
+}
+function addRoom() {
+const c = cfgOf(), id = "c_" + Date.now().toString(36);
+c.custom.push({ id, name: "Neuer Raum" });
+room = id; saveLayout(); renderRooms(); renderGrid(); openRoomPanel(true);
+}
+function openRoomPanel(fresh) {
+const rid = room, c = cfgOf();
+openPanel("Raum bearbeiten", body => {
+const w = h("div", "ctl"), row = h("div", "ctl-row"); row.append(h("span", "", "Name")); w.append(row);
+const inp = document.createElement("input"); inp.type = "text"; inp.className = "textin"; inp.id = "roomName"; inp.value = roomName(rid); inp.maxLength = 30;
+inp.setAttribute("aria-label", "Raumname");
+if (rid === OTHER) inp.disabled = true;
+inp.addEventListener("input", () => {
+const v = inp.value.trim();
+if (isCustomRoom(rid)) { const r = c.custom.find(x => x.id === rid); if (r) r.name = v || "Raum"; }
+v ? (c.names[rid] = v) : delete c.names[rid];
+saveLayout(); renderRooms();
+});
+w.append(inp); body.append(w);
+if (fresh) setTimeout(() => inp.select(), 0);
+const acts = [];
+if (rid !== OTHER) acts.push(["Geräte auswählen", () => openDevicePicker()]);
+acts.push(["← Nach vorn", () => moveRoom(-1)], ["Nach hinten →", () => moveRoom(1)]);
+actions(body, acts);
+const danger = [];
+if (rid !== HOME && rid !== OTHER) {
+const label0 = isCustomRoom(rid) ? "Raum löschen" : "Raum ausblenden";
+const b = h("button", "danger", label0); b.type = "button";
+b.addEventListener("click", () => {
+if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "Wirklich? Nochmal tippen"; return; }
+if (isCustomRoom(rid)) c.custom = c.custom.filter(x => x.id !== rid); else c.hidden.push(rid);
+delete layout[rid]; delete c.add[rid]; delete c.remove[rid]; delete c.names[rid]; c.order = c.order.filter(x => x !== rid);
+room = HOME; saveLayout(); closeSheet(); renderRooms(); renderGrid();
+});
+danger.push(b);
+}
+const reset = h("button", "", "Raum zurücksetzen"); reset.type = "button";
+reset.addEventListener("click", () => { delete layout[rid]; delete c.add[rid]; delete c.remove[rid]; delete c.names[rid]; saveLayout(); closeSheet(); renderRooms(); renderGrid(); });
+danger.push(reset);
+const box = h("div", "actions"); box.append(...danger); body.append(box);
+if (c.hidden.length) {
+const hw = h("div", "ctl"), hr = h("div", "ctl-row"); hr.append(h("span", "", "Ausgeblendete Räume")); hw.append(hr);
+const bx = h("div", "seg");
+c.hidden.forEach(id => {
+const b = h("button", "", "+ " + (c.names[id] || areas.find(a => a.area_id === id)?.name || id)); b.type = "button";
+b.addEventListener("click", () => { c.hidden = c.hidden.filter(x => x !== id); saveLayout(); renderRooms(); closeSheet(); });
+bx.append(b);
+});
+hw.append(bx); body.append(hw);
+}
+});
+}
+function moveRoom(dir) {
+const c = cfgOf(), ids = roomList().map(r => r.id), i = ids.indexOf(room), j = i + dir;
+if (i < 0 || j < 0 || j >= ids.length) return;
+[ids[i], ids[j]] = [ids[j], ids[i]];
+c.order = ids; saveLayout(); renderRooms();
+}
+const DOMAIN_DE = { alarm_control_panel: "Alarmanlagen", scene: "Szenen", camera: "Kameras", climate: "Heizung & Klima", light: "Lichter", switch: "Schalter", input_boolean: "Schalter (Helfer)", fan: "Ventilatoren", humidifier: "Luftbefeuchter",
+cover: "Rollos & Tore", lock: "Schlösser", vacuum: "Staubsauger", media_player: "Mediaplayer", button: "Buttons", input_button: "Buttons", number: "Zahlenfelder", input_number: "Zahlenfelder", select: "Auswahlfelder", input_select: "Auswahlfelder",
+binary_sensor: "Binärsensoren", sensor: "Sensoren" };
+function openDevicePicker() {
+const rid = room;
+openPanel("Geräte · " + roomName(rid), body => {
+const q = document.createElement("input"); q.type = "search"; q.className = "textin"; q.id = "pickSearch"; q.placeholder = "Geräte suchen"; q.setAttribute("aria-label", "Geräte suchen");
+const list = h("div", "picklist"); body.append(q, list);
+const draw = () => {
+const term = q.value.trim().toLowerCase(), sel = new Set(roomMembers(rid));
+const all = [...states.values()].filter(supported).filter(s => !term || nameOf(s).toLowerCase().includes(term) || s.entity_id.toLowerCase().includes(term)).sort(byDefault);
+const out = []; let last = "";
+all.forEach(s => {
+const g = DOMAIN_DE[domainOf(s.entity_id)] || domainOf(s.entity_id);
+if (g !== last) { out.push(h("div", "pick-group", g)); last = g; }
+const b = h("button", "pick-row"); b.type = "button"; b.setAttribute("aria-pressed", String(sel.has(s.entity_id)));
+b.append(h("span", "pick-check", "✓"), h("span", "pick-name", nameOf(s)), h("span", "pick-id", s.entity_id));
+b.addEventListener("click", () => {
+toggleMember(rid, s.entity_id);
+b.setAttribute("aria-pressed", String(roomMembers(rid).includes(s.entity_id)));
+renderRooms(); renderGrid();
+});
+out.push(b);
+});
+list.replaceChildren(...(out.length ? out : [h("div", "info", "Keine Geräte gefunden.")]));
+};
+q.addEventListener("input", draw); draw();
+});
 }
 function renderHeader() {
 const d = new Date();

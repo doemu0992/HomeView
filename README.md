@@ -36,6 +36,10 @@ views:
         aspect_ratio: 100%
 ```
 
+## Räume und Geräte bearbeiten
+
+Im Anordnen-Modus: „+ Raum“ legt einen Raum an, „Raum bearbeiten“ benennt, verschiebt, blendet aus oder löscht ihn, „Geräte“ wählt frei aus, welche Geräte in einem Raum erscheinen (ein Gerät kann in mehreren Räumen sein).
+
 ## Anordnen
 
 Unten rechts auf „Anordnen“ tippen (oder lange auf freie Fläche / die Uhr drücken): Die Kacheln wackeln, lassen sich per Ziehen umsortieren, über das Größen-Symbol (1×1, 2×1, 2×2, 1×2) vergrößern und verkleinern und über „−“ ausblenden. Das Layout wird pro Raum im Browser des Displays gespeichert; „Zurücksetzen“ stellt den Standard wieder her.
