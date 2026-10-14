@@ -1057,17 +1057,84 @@ function openDevicePicker() {
   });
 }
 
+/* ---------- Wetter: animierte Symbole ---------- */
+let demoMode = false;
+const WSTAR = (x, y, d) => `<circle class="w-star" cx="${x}" cy="${y}" r="1.4" style="animation-delay:${d}s"/>`;
+const CLOUD = (cls = "", tr = "translate(2 4)") => `<g transform="${tr}"><path class="w-cloud ${cls}" d="M18 46A8 8 0 0 1 18 30A12 12 0 0 1 42 30A8 8 0 0 1 42 46Z"/></g>`;
+const SUN = (cx, cy, r0, r1, rc) => `<g class="w-sun"><g class="w-rays" style="transform-origin:${cx}px ${cy}px">${[...Array(8)].map((_, i) => { const a = i * Math.PI / 4; return `<line x1="${(cx + Math.cos(a) * r0).toFixed(1)}" y1="${(cy + Math.sin(a) * r0).toFixed(1)}" x2="${(cx + Math.cos(a) * r1).toFixed(1)}" y2="${(cy + Math.sin(a) * r1).toFixed(1)}"/>`; }).join("")}</g><circle class="w-core" cx="${cx}" cy="${cy}" r="${rc}"/></g>`;
+const MOON = tr => `<g transform="${tr}"><path class="w-moon" d="M36 8A22 22 0 1 0 56 40A17 17 0 0 1 36 8Z"/></g>`;
+const DROPS = (n, dur) => [...Array(n)].map((_, i) => { const x = 20 + (i + 0.5) * (26 / n) + (i % 2) * 2; return `<line class="w-drop" x1="${x.toFixed(1)}" y1="48" x2="${(x - 2).toFixed(1)}" y2="54" style="animation-duration:${dur}s;animation-delay:${(i * dur / n).toFixed(2)}s"/>`; }).join("");
+const FLAKES = (n, dur) => [...Array(n)].map((_, i) => `<circle class="w-flake" cx="${(21 + (i + 0.5) * (26 / n)).toFixed(1)}" cy="48" r="1.9" style="animation-duration:${dur}s;animation-delay:${(i * dur / n).toFixed(2)}s"/>`).join("");
+const HAILS = n => [...Array(n)].map((_, i) => `<circle class="w-hail" cx="${(21 + (i + 0.5) * (26 / n)).toFixed(1)}" cy="48" r="2.2" style="animation-delay:${(i * 0.18).toFixed(2)}s"/>`).join("");
+const BOLT = '<path class="w-bolt" d="M35 36l-7 11h5l-3 9 10-13h-6l4-7Z"/>';
+function weatherIcon(state, night) {
+  let inner;
+  switch (state) {
+    case "sunny": inner = night ? MOON("translate(0 0)") + WSTAR(50, 14, 0) + WSTAR(12, 20, .8) + WSTAR(20, 8, 1.5) : SUN(32, 32, 14, 22, 9); break;
+    case "clear-night": inner = MOON("translate(0 0)") + WSTAR(50, 14, 0) + WSTAR(12, 20, .8) + WSTAR(20, 8, 1.5); break;
+    case "partlycloudy": inner = (night ? MOON("translate(-8 -6) scale(.72)") : SUN(24, 24, 10, 15, 7)) + CLOUD("", "translate(8 8)"); break;
+    case "cloudy": inner = CLOUD("w-back", "translate(-6 -2) scale(.85)") + CLOUD("", "translate(6 8)"); break;
+    case "fog": inner = CLOUD("w-light", "translate(2 -4)") + [48, 54, 60].map((y, i) => `<line class="w-fog" x1="14" y1="${y}" x2="50" y2="${y}" style="animation-delay:${i * .6}s"/>`).join(""); break;
+    case "rainy": inner = CLOUD("w-dark", "translate(2 0)") + DROPS(3, 1.1); break;
+    case "pouring": inner = CLOUD("w-dark", "translate(2 0)") + DROPS(6, .7); break;
+    case "snowy": inner = CLOUD("w-dark", "translate(2 0)") + FLAKES(4, 2.6); break;
+    case "snowy-rainy": inner = CLOUD("w-dark", "translate(2 0)") + DROPS(2, 1.1) + FLAKES(2, 2.6); break;
+    case "hail": inner = CLOUD("w-dark", "translate(2 0)") + HAILS(4); break;
+    case "lightning": inner = CLOUD("w-storm", "translate(2 -2)") + BOLT; break;
+    case "lightning-rainy": inner = CLOUD("w-storm", "translate(2 -4)") + BOLT + DROPS(2, .9); break;
+    case "windy": case "windy-variant": inner = [[22, 0], [32, .4], [42, .8]].map(([y, d]) => `<path class="w-wind" d="M10 ${y}h30a6 6 0 1 0-6-6" style="animation-delay:${d}s"/>`).join(""); break;
+    case "exceptional": inner = '<path class="w-warn" d="M32 8L58 54H6Z"/><path class="w-warn-i" d="M32 24v14M32 44v1"/>'; break;
+    default: inner = CLOUD("", "translate(2 6)");
+  }
+  return `<svg class="wi" viewBox="0 0 64 64" aria-hidden="true">${inner}</svg>`;
+}
+const isNight = () => {
+  const sun = states.get("sun.sun");
+  if (sun) return sun.state === "below_horizon";
+  const h = new Date().getHours(); return h >= 21 || h < 6;
+};
+function weatherEntity() {
+  const c = cfgOf();
+  return (c.weather && states.get(c.weather)) || [...states.values()].find(s => domainOf(s.entity_id) === "weather");
+}
+
 function renderHeader() {
   const d = new Date();
   $("time").textContent = pad(d.getHours()) + ":" + pad(d.getMinutes());
   $("date").textContent = d.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
-  const all = [...states.values()];
-  const w = all.find(s => domainOf(s.entity_id) === "weather");
-  const c = all.find(s => domainOf(s.entity_id) === "climate" && s.attributes.current_temperature != null);
-  const parts = [];
-  if (w) parts.push(`<b>${w.attributes.temperature != null ? fmt(w.attributes.temperature, 0) + "°" : ""}</b>`, `<span>${WEATHER[w.state] || w.state}</span>`);
-  if (c) parts.push(`<span>Innen ${fmt(c.attributes.current_temperature)}°</span>`);
-  $("wx").innerHTML = parts.join("");
+  const w = weatherEntity();
+  const c = [...states.values()].find(s => domainOf(s.entity_id) === "climate" && s.attributes.current_temperature != null);
+  if (!w) { $("wx").innerHTML = c ? `<div class="wx-txt"><span>Innen ${fmt(c.attributes.current_temperature)}°</span></div>` : ""; return; }
+  const t = w.attributes.temperature;
+  const second = [nameOf(w), c ? `Innen ${fmt(c.attributes.current_temperature)}°` : ""].filter(Boolean).join(" · ");
+  $("wx").innerHTML = `<button type="button" class="wx-btn" aria-label="Wetter-Details">${weatherIcon(w.state, isNight())}<div class="wx-txt"><b>${t != null ? fmt(t, 0) + "°" : ""}</b><span>${WEATHER[w.state] || w.state}</span><span>${second}</span></div></button>`;
+}
+$("wx").addEventListener("click", e => { if (e.target.closest(".wx-btn")) openWeatherPanel(); });
+
+function openWeatherPanel() {
+  openPanel("Wetter", body => {
+    const w = weatherEntity();
+    if (!w) { body.append(h("div", "info", "Es gibt keine Wetter-Integration in Home Assistant. Füge zum Beispiel „Met.no“ oder „MeteoSwiss“ mit dem gewünschten Ort hinzu.")); return; }
+    const a = w.attributes, big = h("div", "wbig");
+    big.innerHTML = weatherIcon(w.state, isNight()) + `<div><div class="wtemp">${a.temperature != null ? fmt(a.temperature, 0) + "°" : "–"}</div><div class="info">${WEATHER[w.state] || w.state} · ${nameOf(w)}</div></div>`;
+    body.append(big);
+    const rows = [["Luftfeuchte", a.humidity != null && a.humidity + " %"], ["Wind", a.wind_speed != null && fmt(a.wind_speed, 0) + " " + (a.wind_speed_unit || "km/h")],
+      ["Böen", a.wind_gust_speed != null && fmt(a.wind_gust_speed, 0) + " " + (a.wind_speed_unit || "km/h")], ["Luftdruck", a.pressure != null && fmt(a.pressure, 0) + " " + (a.pressure_unit || "hPa")],
+      ["Gefühlt", a.apparent_temperature != null && fmt(a.apparent_temperature, 0) + "°"], ["Sichtweite", a.visibility != null && fmt(a.visibility, 0) + " " + (a.visibility_unit || "km")]].filter(r => r[1]);
+    if (rows.length) { const g = h("div", "wgrid"); rows.forEach(([k, v]) => { const c = h("div", "wcell"); c.append(h("span", "", k), h("b", "", v)); g.append(c); }); body.append(g); }
+    const all = [...states.values()].filter(s => domainOf(s.entity_id) === "weather");
+    if (all.length > 1) seg(body, { label: "Wetterquelle", options: all.map(s => [s.entity_id, nameOf(s)]), on: v => { cfgOf().weather = v; saveLayout(); renderHeader(); openWeatherPanel(); } }).set(w.entity_id);
+    const nw = h("div", "ctl"), nr = h("div", "ctl-row"); nr.append(h("span", "", "Ortsname anzeigen als")); nw.append(nr);
+    const inp = document.createElement("input"); inp.type = "text"; inp.className = "textin"; inp.id = "wxName"; inp.maxLength = 40; inp.placeholder = w.attributes.friendly_name || w.entity_id;
+    const ent = cfgOf().ent[w.entity_id]; inp.value = (ent && ent.name) || "";
+    inp.addEventListener("input", () => { const o = (cfgOf().ent[w.entity_id] = cfgOf().ent[w.entity_id] || {}); const v = inp.value.trim(); v ? (o.name = v) : delete o.name; saveLayout(); renderHeader(); });
+    nw.append(inp); body.append(nw);
+    if (demoMode) {
+      const conds = [["sunny", "Sonnig"], ["partlycloudy", "Leicht bewölkt"], ["cloudy", "Bewölkt"], ["rainy", "Regen"], ["pouring", "Starkregen"], ["snowy", "Schnee"], ["snowy-rainy", "Schneeregen"], ["hail", "Hagel"], ["lightning", "Gewitter"], ["lightning-rainy", "Gewitter + Regen"], ["fog", "Nebel"], ["windy", "Windig"], ["clear-night", "Klare Nacht"], ["exceptional", "Warnung"]];
+      const sg = seg(body, { label: "Mockup: Wetterlage ausprobieren", options: conds, on: v => { pushState({ ...w, state: v }); renderHeader(); big.firstChild.outerHTML = weatherIcon(v, v === "clear-night" || isNight()); sg.set(v); big.querySelector(".info").textContent = (WEATHER[v] || v) + " · " + nameOf(w); } });
+      sg.set(w.state);
+    }
+  });
 }
 setInterval(() => $("app").hidden || renderHeader(), 15000);
 
@@ -1286,9 +1353,11 @@ function demoFrame(label, hue) {
   return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
 }
 function startDemo() {
+  demoMode = true;
   const S = (entity_id, state, attributes = {}) => ({ entity_id, state, attributes });
   const list = [
     S("weather.home", "partlycloudy", { temperature: 14, friendly_name: "Zuhause" }),
+    S("weather.bellach", "rainy", { temperature: 11, friendly_name: "Bellach 4512", humidity: 78, wind_speed: 14, wind_speed_unit: "km/h", pressure: 1012, pressure_unit: "hPa", apparent_temperature: 9, wind_gust_speed: 26, visibility: 9 }),
     S("scene.filmabend", "scening", { friendly_name: "Filmabend" }),
     S("scene.guten_morgen", "scening", { friendly_name: "Guten Morgen" }),
     S("climate.wohnzimmer", "heat", { friendly_name: "Wohnzimmer", temperature: 22, current_temperature: 21.5, min_temp: 16, max_temp: 28, target_temp_step: 0.5, hvac_action: "heating",
@@ -1379,6 +1448,7 @@ function startDemo() {
     }])),
   };
   conn = { close() {}, call(domain, service, data, id) { const r = (SVC[`${domain}.${service}`] || (() => {}))(id, data || {}); return Promise.resolve(r !== false); } };
+  cfgOf().weather = cfgOf().weather || "weather.bellach";
   showApp();
 }
 

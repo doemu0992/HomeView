@@ -29,9 +29,6 @@ button{font:inherit;color:inherit}
 header{display:flex;justify-content:space-between;align-items:flex-start;gap:1.5rem}
 .time{font-size:5.6rem;font-weight:200;letter-spacing:-.04em;line-height:.95}
 .date{font-size:1.5rem;color:var(--ink-2);margin-top:.4rem;font-weight:500}
-.wx{text-align:right}
-.wx b{font-size:3.2rem;font-weight:300;letter-spacing:-.02em}
-.wx span{display:block;font-size:1.3rem;color:var(--ink-2);margin-top:.15rem}
 
 main{
   display:grid; gap:1.1rem; min-height:0; overflow-y:auto; scrollbar-width:none; padding:.2rem;
@@ -269,3 +266,55 @@ main{flex:1}
 .tile.on:not(.noanim) .ic[data-icon="plant"]{animation:hv-sway 3s ease-in-out infinite;transform-origin:50% 100%}
 .tile.on:not(.noanim) .ic[data-icon="washer"]{animation:hv-shake .35s linear infinite}
 @media (prefers-reduced-motion:reduce){.ic{animation:none!important}}
+
+/* Wetter */
+.hright .wx{display:block}
+.wx-btn{display:flex;align-items:center;gap:1rem;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;text-align:right;padding:0}
+.wx-txt{display:flex;flex-direction:column;align-items:flex-end}
+.wx-txt b{font-size:3.2rem;font-weight:300;letter-spacing:-.02em;line-height:1}
+.wx-txt span{font-size:1.2rem;color:var(--ink-2);margin-top:.15rem}
+.wi{width:5.4rem;height:5.4rem;flex:none;overflow:visible}
+.wbig{display:flex;align-items:center;gap:1.4rem}
+.wbig .wi{width:8rem;height:8rem}
+.wtemp{font-size:4.6rem;font-weight:200;line-height:1}
+.wgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(9rem,1fr));gap:.6rem}
+.wcell{display:grid;gap:.2rem;padding:.7rem .9rem;border-radius:1.1rem;background:rgba(255,255,255,.1);font-size:1.05rem;color:var(--ink-2)}
+.wcell b{font-size:1.4rem;color:#fff;font-weight:600}
+.wi *{transform-box:view-box}
+.wi .w-cloud{fill:#fff;opacity:.96}
+.wi .w-light{opacity:.7}
+.wi .w-back{fill:#cdd6e6;opacity:.85}
+.wi .w-dark{fill:#d3dae8}
+.wi .w-storm{fill:#9aa6bd}
+.wi .w-rays line{stroke:#ffc940;stroke-width:3;stroke-linecap:round}
+.wi .w-core{fill:#ffc940}
+.wi .w-moon{fill:#f5ecc8}
+.wi .w-star{fill:#fff}
+.wi .w-drop{stroke:#7cc4ff;stroke-width:2.6;stroke-linecap:round;fill:none}
+.wi .w-flake,.wi .w-hail{fill:#fff}
+.wi .w-hail{fill:#dff0ff}
+.wi .w-bolt{fill:#ffd23f}
+.wi .w-fog{stroke:#fff;stroke-width:3;stroke-linecap:round;opacity:.85}
+.wi .w-wind{stroke:#fff;stroke-width:3;stroke-linecap:round;fill:none}
+.wi .w-warn{fill:#ffb340}.wi .w-warn-i{stroke:#3a2400;stroke-width:4;stroke-linecap:round;fill:none}
+@keyframes w-spin{to{transform:rotate(360deg)}}
+@keyframes w-pulse{50%{transform:scale(1.07)}}
+@keyframes w-drift{from{transform:translateX(-2px)}to{transform:translateX(3px)}}
+@keyframes w-fall{0%{transform:translateY(-6px);opacity:0}20%{opacity:1}100%{transform:translateY(12px);opacity:0}}
+@keyframes w-snow{0%{transform:translate(0,-6px);opacity:0}15%{opacity:1}50%{transform:translate(3px,3px)}100%{transform:translate(-2px,12px);opacity:0}}
+@keyframes w-flash{0%,52%,58%,100%{opacity:.15}54%,56%,60%{opacity:1}}
+@keyframes w-slide{from{transform:translateX(-4px)}to{transform:translateX(4px)}}
+@keyframes w-twinkle{50%{opacity:.2;transform:scale(.6)}}
+@keyframes w-gust{0%{transform:translateX(-3px);opacity:.5}50%{opacity:1}100%{transform:translateX(5px);opacity:.5}}
+.wi .w-rays{animation:w-spin 22s linear infinite}
+.wi .w-core{animation:w-pulse 3.2s ease-in-out infinite;transform-origin:center;transform-box:fill-box}
+.wi .w-cloud{animation:w-drift 5s ease-in-out infinite alternate}
+.wi .w-back{animation-duration:7s;animation-direction:alternate-reverse}
+.wi .w-drop{animation:w-fall 1.1s linear infinite}
+.wi .w-flake{animation:w-snow 2.6s linear infinite}
+.wi .w-hail{animation:w-fall .7s ease-in infinite}
+.wi .w-bolt{animation:w-flash 3.2s linear infinite}
+.wi .w-fog{animation:w-slide 3s ease-in-out infinite alternate}
+.wi .w-wind{animation:w-gust 2s ease-in-out infinite alternate}
+.wi .w-star{animation:w-twinkle 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+@media (prefers-reduced-motion:reduce){.wi *{animation:none!important}}
