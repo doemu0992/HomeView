@@ -60,6 +60,10 @@ Symbole bewegen sich passend zum Zustand: Ventilator/Staubsauger drehen sich, La
 
 Oben rechts zeigt HomeView das Wetter mit animiertem Symbol (Sonne, Wolken, Regen, Schnee, Gewitter, Nebel, Wind, Nacht). Antippen öffnet Details (Luftfeuchte, Wind, Luftdruck …), die Wahl der Wetterquelle (wenn mehrere Wetter-Integrationen vorhanden sind) und den Ortsnamen, z. B. „Bellach 4512“.
 
+## Räume verwalten
+
+Anordnen → „Räume“: alle Räume an einer Stelle. Neue Räume anlegen, jeden Raum ein- oder ausblenden (auch leere Räume aus Home Assistant), umbenennen, per Pfeil sortieren, eigene Räume löschen. Die Geräte pro Raum wählst du mit „Geräte“.
+
 ## Name, Symbol, Animation
 
 Im Anordnen-Modus auf das Stift-Symbol einer Kachel tippen (oder im Detailfenster „Name und Symbol ändern“): Gerät umbenennen, aus rund 40 Symbolen wählen, Animation ein- oder ausschalten. Animierte Symbole bewegen sich, solange das Gerät an ist (Ventilator dreht sich, Lampe leuchtet, Flamme flackert, Glocke schwingt …).

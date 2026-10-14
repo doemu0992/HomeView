@@ -683,7 +683,7 @@ const showOnHome = s => HOME_DOMAINS.has(domainOf(s.entity_id)) || (domainOf(s.e
 /* ---------- Räume & Gerätezuordnung ---------- */
 const cfgOf = () => {
   const c = layout.__cfg = layout.__cfg || {};
-  c.ent = c.ent || {}; c.order = c.order || []; c.names = c.names || {}; c.hidden = c.hidden || []; c.custom = c.custom || []; c.add = c.add || {}; c.remove = c.remove || {};
+  c.show = c.show || []; c.ent = c.ent || {}; c.order = c.order || []; c.names = c.names || {}; c.hidden = c.hidden || []; c.custom = c.custom || []; c.add = c.add || {}; c.remove = c.remove || {};
   return c;
 };
 const rankOf = s => ORDER.indexOf(domainOf(s.entity_id));
@@ -720,17 +720,22 @@ function toggleMember(rid, id) {
   }
   saveLayout();
 }
-function roomList() {
+function roomListAll() {
   const c = cfgOf();
-  const base = [{ id: HOME, name: "Zuhause" },
-    ...areas.filter(a => !c.hidden.includes(a.area_id)).map(a => ({ id: a.area_id, name: a.name })),
-    ...c.custom.map(x => ({ id: x.id, name: x.name }))];
-  const list = base.filter(r => r.id === HOME || isCustomRoom(r.id) || roomMembers(r.id).length);
-  if (baseMembers(OTHER).length) list.push({ id: OTHER, name: "Weitere" });
+  const list = [{ id: HOME, name: "Zuhause" }, ...areas.map(a => ({ id: a.area_id, name: a.name })), ...c.custom.map(x => ({ id: x.id, name: x.name })), { id: OTHER, name: "Weitere" }];
   list.forEach(r => { if (c.names[r.id]) r.name = c.names[r.id]; });
   const pos = new Map(c.order.map((id, i) => [id, i]));
   return list.map((r, i) => [r, i]).sort((x, y) => (pos.has(x[0].id) ? pos.get(x[0].id) : 1e6 + x[1]) - (pos.has(y[0].id) ? pos.get(y[0].id) : 1e6 + y[1])).map(x => x[0]);
 }
+function roomVisible(r) {
+  const c = cfgOf();
+  if (r.id === HOME) return true;
+  if (c.hidden.includes(r.id)) return false;
+  if (isCustomRoom(r.id)) return true;
+  if (r.id === OTHER) return baseMembers(OTHER).length > 0;
+  return roomMembers(r.id).length > 0 || c.show.includes(r.id);
+}
+const roomList = () => roomListAll().filter(roomVisible);
 function roomName(id) {
   return cfgOf().names[id] || (id === HOME ? "Zuhause" : id === OTHER ? "Weitere" : cfgOf().custom.find(x => x.id === id)?.name || areas.find(a => a.area_id === id)?.name || id);
 }
@@ -917,7 +922,7 @@ function renderRooms() {
   const mk = (txt, fn, cls = "") => { const b = h("button", "edit-btn " + cls, txt); b.type = "button"; b.addEventListener("click", fn); return b; };
   const bar = [];
   if (editing) {
-    bar.push(mk("Raum bearbeiten", openRoomPanel, "ghost"));
+    bar.push(mk("Räume", openRoomManager, "ghost"));
     if (room !== OTHER) bar.push(mk("Geräte", openDevicePicker, "ghost"));
     bar.push(mk("Zurücksetzen", () => { delete layout[room]; saveLayout(); tiles.forEach(t => { t.el.style.gridColumn = t.el.style.gridRow = ""; }); renderGrid(); }, "ghost"));
   }
@@ -956,6 +961,64 @@ function openEntityPanel(id) {
     const rs = h("button", "", "Auf Standard zurücksetzen"); rs.type = "button";
     rs.addEventListener("click", () => { delete c.ent[id]; refresh(); openEntityPanel(id); });
     const box = h("div", "actions"); box.append(rs); body.append(box);
+  });
+}
+
+/* ---------- Raumverwaltung: alle Räume an einer Stelle ---------- */
+function openRoomManager() {
+  openPanel("Räume verwalten", body => {
+    const c = cfgOf();
+    const addRow = h("div", "rm-add");
+    const ni = document.createElement("input"); ni.type = "text"; ni.id = "roomNew"; ni.className = "textin"; ni.placeholder = "Neuer Raum, zum Beispiel Büro"; ni.maxLength = 30; ni.setAttribute("aria-label", "Name des neuen Raums");
+    const nb = h("button", "primary", "Hinzufügen"); nb.type = "button";
+    const create = () => {
+      const v = ni.value.trim(); if (!v) { ni.focus(); return; }
+      c.custom.push({ id: "c_" + Date.now().toString(36), name: v }); ni.value = ""; saveLayout(); renderRooms(); draw();
+    };
+    nb.addEventListener("click", create); ni.addEventListener("keydown", e => { if (e.key === "Enter") create(); });
+    addRow.append(ni, nb);
+    const list = h("div", "rm-list");
+    body.append(addRow, list, h("div", "info", "Ausgeblendete Räume bleiben erhalten und lassen sich hier jederzeit wieder einblenden. Leere Räume aus Home Assistant erscheinen erst, wenn du sie einblendest."));
+    function draw() {
+      const all = roomListAll();
+      list.replaceChildren(...all.map((r, idx) => {
+        const row = h("div", "rm-row"), vis = roomVisible(r), n = r.id === OTHER ? baseMembers(OTHER).length : roomMembers(r.id).length;
+        const eye = h("button", "rm-eye", vis ? "Sichtbar" : "Aus"); eye.type = "button"; eye.setAttribute("aria-pressed", String(vis));
+        eye.setAttribute("aria-label", (vis ? "Ausblenden: " : "Einblenden: ") + r.name);
+        if (r.id === HOME) { eye.disabled = true; }
+        eye.addEventListener("click", () => {
+          if (vis) { if (!c.hidden.includes(r.id)) c.hidden.push(r.id); c.show = c.show.filter(x => x !== r.id); if (room === r.id) room = HOME; }
+          else { c.hidden = c.hidden.filter(x => x !== r.id); if (!isCustomRoom(r.id) && !n && !c.show.includes(r.id)) c.show.push(r.id); }
+          saveLayout(); renderRooms(); renderGrid(); draw();
+        });
+        const name = document.createElement("input"); name.type = "text"; name.className = "textin rm-name"; name.value = r.name; name.defaultValue = r.name; name.maxLength = 30; name.setAttribute("aria-label", "Raumname");
+        if (r.id === OTHER) name.disabled = true;
+        name.addEventListener("input", () => {
+          const v = name.value.trim();
+          if (isCustomRoom(r.id)) { const x = c.custom.find(y => y.id === r.id); if (x) x.name = v || "Raum"; }
+          const orig = isCustomRoom(r.id) ? null : (r.id === HOME ? "Zuhause" : areas.find(a => a.area_id === r.id)?.name);
+          (v && v !== orig) ? (c.names[r.id] = v) : delete c.names[r.id];
+          saveLayout(); renderRooms();
+        });
+        const cnt = h("span", "rm-count", n + (n === 1 ? " Gerät" : " Geräte"));
+        const mv = d => { const ids = all.map(x => x.id), j = idx + d; if (j < 0 || j >= ids.length) return; [ids[idx], ids[j]] = [ids[j], ids[idx]]; c.order = ids; saveLayout(); renderRooms(); draw(); };
+        const up = h("button", "rm-mv", "↑"); up.type = "button"; up.setAttribute("aria-label", "Nach oben"); up.disabled = idx === 0; up.addEventListener("click", () => mv(-1));
+        const dn = h("button", "rm-mv", "↓"); dn.type = "button"; dn.setAttribute("aria-label", "Nach unten"); dn.disabled = idx === all.length - 1; dn.addEventListener("click", () => mv(1));
+        row.append(eye, name, cnt, up, dn);
+        if (isCustomRoom(r.id)) {
+          const del = h("button", "rm-del", "Löschen"); del.type = "button";
+          del.addEventListener("click", () => {
+            if (del.dataset.sure !== "1") { del.dataset.sure = "1"; del.textContent = "Sicher?"; return; }
+            c.custom = c.custom.filter(x => x.id !== r.id); delete layout[r.id]; delete c.add[r.id]; delete c.remove[r.id]; delete c.names[r.id];
+            c.hidden = c.hidden.filter(x => x !== r.id); c.order = c.order.filter(x => x !== r.id); if (room === r.id) room = HOME;
+            saveLayout(); renderRooms(); renderGrid(); draw();
+          });
+          row.append(del);
+        }
+        return row;
+      }));
+    }
+    draw();
   });
 }
 
@@ -1000,7 +1063,7 @@ function openRoomPanel(fresh) {
       const b = h("button", "danger", label0); b.type = "button";
       b.addEventListener("click", () => {
         if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "Wirklich? Nochmal tippen"; return; }
-        if (isCustomRoom(rid)) c.custom = c.custom.filter(x => x.id !== rid); else c.hidden.push(rid);
+        if (isCustomRoom(rid)) c.custom = c.custom.filter(x => x.id !== rid); else { c.hidden.push(rid); c.show = c.show.filter(x => x !== rid); }
         delete layout[rid]; delete c.add[rid]; delete c.remove[rid]; delete c.names[rid]; c.order = c.order.filter(x => x !== rid);
         room = HOME; saveLayout(); closeSheet(); renderRooms(); renderGrid();
       });
@@ -1393,7 +1456,7 @@ function startDemo() {
     S("button.klingel_test", "unknown", { friendly_name: "Klingel testen" }),
   ];
   list.forEach(s => states.set(s.entity_id, s));
-  areas = [{ area_id: "wz", name: "Wohnzimmer" }, { area_id: "ku", name: "Küche" }, { area_id: "sz", name: "Schlafzimmer" }, { area_id: "au", name: "Außen" }];
+  areas = [{ area_id: "wz", name: "Wohnzimmer" }, { area_id: "ku", name: "Küche" }, { area_id: "sz", name: "Schlafzimmer" }, { area_id: "au", name: "Außen" }, { area_id: "bu", name: "Büro" }];
   Object.entries({ "climate.wohnzimmer": "wz", "light.stehlampe": "wz", "light.decke": "wz", "fan.ventilator": "wz", "sensor.feuchte_wz": "wz", "binary_sensor.fenster_wz": "wz",
     "media_player.kueche": "ku", "sensor.temp_kueche": "ku", "sensor.temp_schlaf": "sz", "sensor.feuchte_schlaf": "sz", "light.kueche": "ku", "switch.kaffee": "ku", "light.bett": "sz", "humidifier.schlafzimmer": "sz",
     "lock.haustuer": "au", "camera.eingang": "au", "camera.garten": "au", "alarm_control_panel.haus": "au", "cover.rollo": "au", "sensor.temp_aussen": "au" }).forEach(([k, v]) => entityArea.set(k, v));

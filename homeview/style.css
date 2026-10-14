@@ -341,3 +341,20 @@ main{flex:1}
 .chip[data-kind="power"] .ic{animation:hv-pulse 2s ease-in-out infinite}
 .chip.warn .ic{animation:hv-wiggle 3s ease-in-out infinite}
 @media (prefers-reduced-motion:reduce){.camera.live .state::before,.climate .arc,.chip .ic{animation:none!important}}
+
+/* Raumverwaltung */
+.rm-add{display:flex;gap:.6rem;align-items:center}
+.rm-add .textin{flex:1;min-width:0}
+.rm-add button{font-size:1.15rem;font-weight:600;padding:.75rem 1.2rem;border-radius:99px;border:0;cursor:pointer;flex:none}
+.rm-list{display:grid;gap:.5rem}
+.rm-row{display:flex;align-items:center;gap:.6rem;padding:.5rem .6rem;border-radius:1.2rem;background:rgba(255,255,255,.08);flex-wrap:wrap}
+.rm-eye{border:0;border-radius:99px;padding:.5rem 1rem;font-size:1.05rem;font-weight:600;min-width:6.2rem;cursor:pointer;background:rgba(255,255,255,.14)}
+.rm-eye[aria-pressed="true"]{background:#fff;color:var(--on-ink)}
+.rm-eye:disabled{opacity:.6;cursor:default}
+.rm-name{flex:1 1 9rem;min-width:7rem;padding:.55rem .8rem!important;font-size:1.2rem!important}
+.rm-count{font-size:1rem;color:var(--ink-2);white-space:nowrap}
+.rm-mv,.rm-del{border:0;border-radius:.9rem;background:rgba(255,255,255,.14);padding:.45rem .8rem;font-size:1.1rem;cursor:pointer}
+.rm-mv:disabled{opacity:.3;cursor:default}
+.rm-del{background:rgba(255,69,58,.35);font-size:1rem}
+.sheet[data-kind=panel] .rm-row .textin{background:rgba(0,0,0,.28)}
+.ec-edit{position:absolute;display:grid;place-items:center;background:rgba(20,18,32,.82);color:#fff;font-weight:700;box-shadow:0 0 0 1px rgba(255,255,255,.25)}
