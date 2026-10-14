@@ -239,3 +239,33 @@ main{flex:1}
 .boot{position:fixed;inset:0;display:grid;place-items:center;font-size:1.6rem;color:rgba(255,255,255,.8);z-index:4}
 
 .empty{grid-column:1/-1;color:var(--ink-2);font-size:1.4rem;padding:2rem 0}
+
+/* Symbol-Auswahl & Animation */
+.icon-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(3.6rem,1fr));gap:.5rem}
+.icon-grid button{border:0;border-radius:1rem;aspect-ratio:1;display:grid;place-items:center;background:rgba(255,255,255,.12);color:#fff;cursor:pointer}
+.icon-grid button .ic{width:2rem;height:2rem}
+.icon-grid button[aria-pressed="true"]{background:#fff;color:var(--on-ink)}
+.ec-edit{top:.5rem;right:3.2rem;width:2.2rem;height:2.2rem;border-radius:50%;font-size:1.3rem}
+@keyframes hv-spin{to{transform:rotate(360deg)}}
+@keyframes hv-glow{50%{filter:drop-shadow(0 0 .5rem currentColor)}}
+@keyframes hv-flicker{0%,100%{transform:scale(1) rotate(0)}30%{transform:scale(1.1) rotate(-4deg)}60%{transform:scale(.95) rotate(3deg)}}
+@keyframes hv-ring{0%,60%,100%{transform:rotate(0)}10%,30%{transform:rotate(-14deg)}20%,40%{transform:rotate(14deg)}50%{transform:rotate(-6deg)}}
+@keyframes hv-pulse{50%{transform:scale(1.15);opacity:.75}}
+@keyframes hv-bob{50%{transform:translateY(-.3rem)}}
+@keyframes hv-beat{0%,100%{transform:scale(1)}15%{transform:scale(1.2)}30%{transform:scale(1)}45%{transform:scale(1.13)}}
+@keyframes hv-twinkle{50%{transform:scale(1.15) rotate(14deg)}}
+@keyframes hv-sway{50%{transform:rotate(7deg)}}
+@keyframes hv-shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-.12rem) rotate(-2deg)}75%{transform:translateX(.12rem) rotate(2deg)}}
+.tile.on:not(.noanim) .ic[data-icon="fan"],.tile.on:not(.noanim) .ic[data-icon="vacuum"]{animation:hv-spin 1.6s linear infinite}
+.tile.on:not(.noanim) .ic[data-icon="sun"]{animation:hv-spin 14s linear infinite}
+.tile.on:not(.noanim) .ic[data-icon="snow"]{animation:hv-spin 9s linear infinite}
+.tile.on:not(.noanim) .ic[data-icon="light"],.tile.on:not(.noanim) .ic[data-icon="lamp"],.tile.on:not(.noanim) .ic[data-icon="shield"],.tile.on:not(.noanim) .ic[data-icon="scene"]{animation:hv-glow 2.8s ease-in-out infinite}
+.tile.on:not(.noanim) .ic[data-icon="flame"],.tile.on:not(.noanim) .ic[data-icon="heater"]{animation:hv-flicker 1.4s ease-in-out infinite}
+.tile.on:not(.noanim) .ic[data-icon="bell"]{animation:hv-ring 2.2s ease-in-out infinite;transform-origin:50% 15%}
+.tile.on:not(.noanim) .ic[data-icon="speaker"],.tile.on:not(.noanim) .ic[data-icon="media"],.tile.on:not(.noanim) .ic[data-icon="wifi"],.tile.on:not(.noanim) .ic[data-icon="power"],.tile.on:not(.noanim) .ic[data-icon="switch"],.tile.on:not(.noanim) .ic[data-icon="motion"],.tile.on:not(.noanim) .ic[data-icon="plug"],.tile.on:not(.noanim) .ic[data-icon="tv"]{animation:hv-pulse 1.8s ease-in-out infinite}
+.tile.on:not(.noanim) .ic[data-icon="drop"],.tile.on:not(.noanim) .ic[data-icon="coffee"]{animation:hv-bob 2s ease-in-out infinite}
+.tile.on:not(.noanim) .ic[data-icon="heart"]{animation:hv-beat 1.6s ease-in-out infinite}
+.tile.on:not(.noanim) .ic[data-icon="star"]{animation:hv-twinkle 2.4s ease-in-out infinite}
+.tile.on:not(.noanim) .ic[data-icon="plant"]{animation:hv-sway 3s ease-in-out infinite;transform-origin:50% 100%}
+.tile.on:not(.noanim) .ic[data-icon="washer"]{animation:hv-shake .35s linear infinite}
+@media (prefers-reduced-motion:reduce){.ic{animation:none!important}}

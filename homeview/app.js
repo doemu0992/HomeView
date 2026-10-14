@@ -45,9 +45,31 @@ const ICONS = {
   button: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>',
   shield: '<path d="M12 3 5 6v5c0 5 3 8.500 7 10 4-1.500 7-5 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/>',
   camera: '<path d="M3 7h3l1.500-2h9L18 7h3v12H3Z"/><circle cx="12" cy="13" r="3.500"/>',
+  lamp: '<path d="M8 3h8l3 9H5l3-9Z"/><path d="M12 12v8M9 20h6"/>',
+  bed: '<path d="M3 18V8M3 14h18v4M21 14v-3a3 3 0 0 0-3-3h-7v6"/><circle cx="7" cy="11" r="1.5"/>',
+  sofa: '<path d="M5 11V8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/><path d="M3 13a2 2 0 0 1 4 0v2h10v-2a2 2 0 0 1 4 0v5H3v-5Z"/><path d="M6 18v2M18 18v2"/>',
+  tv: '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/>',
+  speaker: '<rect x="6" y="3" width="12" height="18" rx="3"/><circle cx="12" cy="14" r="3"/><circle cx="12" cy="7" r=".8"/>',
+  plug: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0V8ZM12 17v4"/>',
+  heater: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M8 6v12M12 6v12M16 6v12"/>',
+  snow: '<path d="M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9M9 4.5l3 2 3-2M9 19.5l3-2 3 2"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/>',
+  window: '<rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M12 3v18M4 12h16"/>',
+  garage: '<path d="M3 21V9l9-6 9 6v12M7 21v-7h10v7M7 17h10"/>',
+  car: '<path d="M5 16V11l2-5h10l2 5v5M3 16h18M7 16v3M17 16v3"/><circle cx="8" cy="13" r=".8"/><circle cx="16" cy="13" r=".8"/>',
+  plant: '<path d="M12 21v-9M12 12c0-4-3-6-7-6 0 4 3 6 7 6ZM12 14c0-3 2-5 6-5 0 3-2 5-6 5Z"/>',
+  coffee: '<path d="M5 8h11v6a5 5 0 0 1-5 5H10a5 5 0 0 1-5-5V8ZM16 10h2a2 2 0 0 1 0 4h-2M8 3v2M12 3v2"/>',
+  washer: '<rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="13" r="4"/><path d="M7 6.500h2"/>',
+  fridge: '<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M6 10h12M9 6v1.500M9 13v3"/>',
+  bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2ZM10 21h4"/>',
+  wifi: '<path d="M2.500 9a14 14 0 0 1 19 0M5.500 12.500a9.500 9.500 0 0 1 13 0M8.500 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r=".8"/>',
+  flame: '<path d="M12 3c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 1-9Z"/>',
+  home: '<path d="M3 11l9-8 9 8M5 10v10h14V10M10 20v-6h4v6"/>',
+  star: '<path d="M12 3l2.700 5.600 6.100.9-4.400 4.300 1 6.100L12 17l-5.400 2.900 1-6.100L3.200 9.500l6.100-.9Z"/>',
+  heart: '<path d="M12 20s-8-5-8-11a4.500 4.500 0 0 1 8-2.500A4.500 4.500 0 0 1 20 9c0 6-8 11-8 11Z"/>',
   list: '<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
 };
-const icon = k => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k]}</svg>`;
+const icon = k => `<svg class="ic" data-icon="${k}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k]}</svg>`;
 
 /* ---------- Texte ---------- */
 const WEATHER = {
@@ -98,7 +120,10 @@ const tiles = new Map();            // entity_id -> { el, update(state) }
 let sheetCtx = null;                // { id, update(state) }
 
 const domainOf = id => id.split(".")[0];
-const nameOf = s => s.attributes.friendly_name || s.entity_id;
+const nameOf = s => {
+  const o = layout.__cfg && layout.__cfg.ent && layout.__cfg.ent[s.entity_id];
+  return (o && o.name) || s.attributes.friendly_name || s.entity_id;
+};
 
 function pushState(s) {
   states.set(s.entity_id, s);
@@ -407,6 +432,7 @@ function openSheet(id) {
   $("sheet").dataset.kind = domain;
   const upd = d(id, body, (service, data) => conn.call(domain, service, data, id));
   sheetCtx = { id, update: upd }; upd(s);
+  actions(body, [["Name und Symbol ändern", () => openEntityPanel(id)]]);
   $("sheet").hidden = false; $("sheetClose").focus();
 }
 function closeSheet() { sheetCtx?.update.cleanup?.(); $("sheet").hidden = true; sheetCtx = null; $("sheetBody").replaceChildren(); }
@@ -655,7 +681,7 @@ const showOnHome = s => HOME_DOMAINS.has(domainOf(s.entity_id)) || (domainOf(s.e
 /* ---------- Räume & Gerätezuordnung ---------- */
 const cfgOf = () => {
   const c = layout.__cfg = layout.__cfg || {};
-  c.order = c.order || []; c.names = c.names || {}; c.hidden = c.hidden || []; c.custom = c.custom || []; c.add = c.add || {}; c.remove = c.remove || {};
+  c.ent = c.ent || {}; c.order = c.order || []; c.names = c.names || {}; c.hidden = c.hidden || []; c.custom = c.custom || []; c.add = c.add || {}; c.remove = c.remove || {};
   return c;
 };
 const rankOf = s => ORDER.indexOf(domainOf(s.entity_id));
@@ -744,13 +770,27 @@ function setEditing(v) {
   editing = v; $("app").classList.toggle("editing", v);
   closeSheet(); renderRooms(); renderGrid();
 }
+function applyIcon(id, t) {
+  const o = cfgOf().ent[id] || {};
+  const svg = t.el.querySelector(".ic");
+  if (!svg) return;
+  if (svg._def == null) { svg._def = svg.innerHTML; svg._defKey = svg.dataset.icon; }
+  const k = o.icon && ICONS[o.icon] ? o.icon : null;
+  svg.innerHTML = k ? ICONS[k] : svg._def;
+  svg.dataset.icon = k || svg._defKey;
+  t.el.classList.toggle("noanim", o.anim === false);
+}
 function decorate(id, t) {
+  applyIcon(id, t);
   applySize(t.el, sizeOf(id));
   t.el.dataset.id = id;
   const hidden = !!layout[room]?.hidden.includes(id);
   t.el.classList.toggle("is-hidden", editing && hidden);
   if (editing) {
-    if (!t.ctrl) { t.ctrl = h("div", "edit-ctrl"); t.ctrl.append(h("span", "ec-hide"), h("span", "ec-size")); }
+    if (!t.ctrl) {
+      t.ctrl = h("div", "edit-ctrl"); const ed = h("span", "ec-edit", "✎"); ed.setAttribute("aria-label", "Name und Symbol ändern");
+      t.ctrl.append(h("span", "ec-hide"), ed, h("span", "ec-size"));
+    }
     t.ctrl.querySelector(".ec-hide").textContent = hidden ? "+" : "−";
     t.ctrl.querySelector(".ec-hide").setAttribute("aria-label", hidden ? "Einblenden" : "Ausblenden");
     t.ctrl.querySelector(".ec-size").textContent = sizeOf(id).replace("x", "×");
@@ -838,6 +878,8 @@ function renderGrid() {
       lay.size[d.id] = SIZES[(SIZES.indexOf(sizeOf(d.id)) + 1) % SIZES.length];
       if (!lay.order.length) lay.order = [...grid.children].map(k => k.dataset.id);
       saveLayout(); decorate(d.id, t);
+    } else if (hit(t.ctrl.querySelector(".ec-edit"))) {
+      openEntityPanel(d.id);
     } else if (hit(t.ctrl.querySelector(".ec-hide"))) {
       const i = lay.hidden.indexOf(d.id);
       i < 0 ? lay.hidden.push(d.id) : lay.hidden.splice(i, 1);
@@ -879,6 +921,40 @@ function renderRooms() {
   }
   bar.push(mk(editing ? "Fertig" : "Anordnen", () => setEditing(!editing)));
   $("editBar").replaceChildren(...bar);
+}
+
+/* ---------- Fenster: Name, Symbol und Animation eines Geräts ---------- */
+function openEntityPanel(id) {
+  const s = states.get(id); if (!s) return;
+  const c = cfgOf(), get = () => (c.ent[id] = c.ent[id] || {});
+  const refresh = () => { const t = tiles.get(id); if (t) { applyIcon(id, t); t.update(states.get(id)); } scheduleChips(); saveLayout(); };
+  openPanel("Name und Symbol", body => {
+    const w = h("div", "ctl"), row = h("div", "ctl-row"); row.append(h("span", "", "Name")); w.append(row);
+    const inp = document.createElement("input"); inp.type = "text"; inp.className = "textin"; inp.id = "entName"; inp.maxLength = 40;
+    inp.value = (c.ent[id] && c.ent[id].name) || ""; inp.placeholder = s.attributes.friendly_name || id;
+    inp.setAttribute("aria-label", "Gerätename");
+    inp.addEventListener("input", () => { const v = inp.value.trim(); const o = get(); v ? (o.name = v) : delete o.name; refresh(); });
+    w.append(inp); body.append(w, h("div", "info", "Original: " + (s.attributes.friendly_name || id)));
+    const t0 = tiles.get(id);
+    if (t0 && t0.el.querySelector(".ic")) {
+      const iw = h("div", "ctl"), ir = h("div", "ctl-row"); ir.append(h("span", "", "Symbol")); iw.append(ir);
+      const grid = h("div", "icon-grid"), defKey = t0.el.querySelector(".ic")._defKey || t0.el.querySelector(".ic").dataset.icon;
+      const keys = [...new Set([defKey, ...Object.keys(ICONS)])];
+      const btns = keys.map(k => {
+        const b = h("button"); b.type = "button"; b.innerHTML = icon(k); b.setAttribute("aria-label", k === defKey ? "Standardsymbol" : k);
+        b.addEventListener("click", () => { const o = get(); k === defKey ? delete o.icon : (o.icon = k); refresh(); mark(); });
+        grid.append(b); return [k, b];
+      });
+      const mark = () => { const cur = (c.ent[id] && c.ent[id].icon) || defKey; btns.forEach(([k, b]) => b.setAttribute("aria-pressed", String(k === cur))); };
+      mark(); iw.append(grid); body.append(iw);
+      const an = seg(body, { label: "Animation", options: [[true, "An"], [false, "Aus"]], on: v => { const o = get(); v ? delete o.anim : (o.anim = false); refresh(); an.set(v); } });
+      an.set(!(c.ent[id] && c.ent[id].anim === false));
+      body.append(h("div", "info", "Animierte Symbole bewegen sich, solange das Gerät an ist (zum Beispiel dreht sich der Ventilator)."));
+    }
+    const rs = h("button", "", "Auf Standard zurücksetzen"); rs.type = "button";
+    rs.addEventListener("click", () => { delete c.ent[id]; refresh(); openEntityPanel(id); });
+    const box = h("div", "actions"); box.append(rs); body.append(box);
+  });
 }
 
 /* ---------- Fenster: Raum bearbeiten, Geräte wählen ---------- */
