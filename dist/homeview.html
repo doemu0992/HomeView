@@ -232,6 +232,7 @@ background:var(--glass);backdrop-filter:blur(28px) saturate(1.6);-webkit-backdro
 #pickSearch{position:sticky;top:0;z-index:2;background:#17142a;box-shadow:0 .6rem .6rem #1e1b33}
 .editing .tile.unavailable{pointer-events:auto;opacity:.6}
 .boot{position:fixed;inset:0;display:grid;place-items:center;font-size:1.6rem;color:rgba(255,255,255,.8);z-index:4}
+.empty{grid-column:1/-1;color:var(--ink-2);font-size:1.4rem;padding:2rem 0}
 </style>
 </head>
 <body>
@@ -283,6 +284,13 @@ background:var(--glass);backdrop-filter:blur(28px) saturate(1.6);-webkit-backdro
 <div class="banner" id="banner" hidden>Verbindung getrennt – verbinde neu …</div>
 <script>
 "use strict";
+const DEBUG = /(^|[#&])debug=1/.test(location.hash);
+const dbg = msg => {
+if (!DEBUG) return;
+let b = document.getElementById("dbg");
+if (!b) { b = document.createElement("pre"); b.id = "dbg"; b.style.cssText = "position:fixed;left:0;top:0;max-width:100%;max-height:60%;overflow:auto;margin:0;padding:8px 12px;background:rgba(0,0,0,.75);color:#9f9;font:11px/1.35 monospace;z-index:100;white-space:pre-wrap;pointer-events:none"; document.body.append(b); }
+b.textContent += msg + "\n";
+};
 /* Fehler sichtbar machen, statt einen leeren Bildschirm zu zeigen */
 (function () {
 const show = msg => {
@@ -1016,6 +1024,8 @@ t.update(s); decorate(id, t);
 return t.el;
 });
 $("grid").replaceChildren(...els);
+dbg("Kacheln gezeichnet: " + els.length + " (Raum " + room + ")");
+if (!els.length && !editing) { const n = document.createElement("div"); n.className = "empty"; n.textContent = "Keine Geräte gefunden (Entitäten: " + states.size + "). Prüfe unter „Anordnen → Geräte“ die Zuordnung."; $("grid").append(n); }
 });
 }
 /* Ziehen zum Umsortieren, Tippen auf Symbole zum Ändern der Größe */
@@ -1320,7 +1330,8 @@ if (msg) $("err").textContent = msg;
 }
 function showApp() {
 $("boot").hidden = true; $("setup").hidden = true; $("app").hidden = false;
-renderHeader(); renderRooms(); renderGrid();
+[["Kopfzeile", renderHeader], ["Räume", renderRooms], ["Kacheln", renderGrid]].forEach(([n, f]) => { try { f(); dbg("OK " + n); } catch (e) { dbg("FEHLER " + n + ": " + (e && e.message)); window.dispatchEvent(new ErrorEvent("error", { message: n + ": " + (e && e.message) })); } });
+dbg("Entitäten: " + states.size + ", Räume: " + areas.length + ", Zuhause-Geräte: " + visibleIds().length);
 if (new URLSearchParams(location.hash.slice(1)).get("kiosk") === "1") setKiosk(true, { fullscreen: false });
 try { navigator.wakeLock?.request("screen").catch(() => {}); } catch {}
 }
@@ -1350,6 +1361,7 @@ return ha && ha.hass && ha.hass.callWS ? ha : null;
 } catch { return null; }
 }
 function loadFromHass(ha) {
+dbg("hass.states: " + Object.keys(ha.hass.states || {}).length + ", areas: " + Object.keys(ha.hass.areas || {}).length + ", entities: " + Object.keys(ha.hass.entities || {}).length);
 const H = ha.hass;
 states.clear(); entityArea.clear();
 const ents = H.entities || {}, devs = H.devices || {};
@@ -1363,11 +1375,13 @@ if (a) entityArea.set(s.entity_id, a);
 areas = Object.values(H.areas || {}).map(a => ({ area_id: a.area_id, name: a.name }));
 }
 async function startParent(ha) {
+dbg("Modus: Anmeldung über Dashboard");
 const request = msg => ha.hass.callWS(msg);
 conn = { close() {}, call: (domain, service, data = {}, id) =>
 request({ type: "call_service", domain, service, service_data: data, ...(id ? { target: { entity_id: id } } : {}) }).then(() => true, () => false) };
 loadFromHass(ha);
 await enableRemoteLayout(request);
+dbg("Layout geladen: " + Object.keys(layout).join(","));
 tiles.clear(); closeSheet(); showApp();
 try { await ha.hass.connection.subscribeEvents(handleStateEvent, "state_changed"); } catch {}
 // Sicherheitsnetz: Zustände regelmäßig mit Home Assistant abgleichen (z. B. nach Verbindungsabbruch)
@@ -1508,7 +1522,9 @@ showApp();
 const isDemo = typeof DEMO_ONLY !== "undefined" || new URLSearchParams(location.search).has("demo");
 // Wenn nach 8 Sekunden nichts erscheint, Formular mit Hinweis zeigen statt leerem Bild
 if (!isDemo) setTimeout(() => { if ($("app").hidden && $("setup").hidden) showSetup("Keine Verbindung zu Home Assistant. Bitte Adresse und Token prüfen."); }, 8000);
+dbg("Start, Demo=" + isDemo + ", Hash=" + location.hash);
 const ph = parentHA();
+dbg("Dashboard gefunden: " + !!ph);
 if (ph && !isDemo) return startParent(ph).catch(e => showSetup("Anmeldung über das Dashboard fehlgeschlagen (" + (e && e.message || e) + "). Bitte Adresse und Token eingeben."));
 if (typeof DEMO_ONLY !== "undefined" || new URLSearchParams(location.search).has("demo")) return startDemo();
 // Zugangsdaten aus der Adresse (#url=…&token=…), z. B. wenn HomeView als iframe eingebettet ist

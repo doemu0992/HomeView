@@ -10,5 +10,5 @@ views:
       - type: iframe
         aspect_ratio: 100%
         allow: fullscreen
-        # Optional hinter ?v=3 anhängen: #kiosk=1  und/oder  #chips=1  (z. B. ?v=3#kiosk=1&chips=1)
-        url: /local/homeview.html?v=3
+        # Optional hinter ?v=4 anhängen: #kiosk=1  und/oder  #chips=1  (z. B. ?v=4#kiosk=1&chips=1)
+        url: /local/homeview.html?v=4

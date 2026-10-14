@@ -237,3 +237,5 @@ main{flex:1}
 .editing .tile.unavailable{pointer-events:auto;opacity:.6}
 
 .boot{position:fixed;inset:0;display:grid;place-items:center;font-size:1.6rem;color:rgba(255,255,255,.8);z-index:4}
+
+.empty{grid-column:1/-1;color:var(--ink-2);font-size:1.4rem;padding:2rem 0}
