@@ -148,11 +148,12 @@ function connectHA(baseUrl, token, handlers) {
 }
 
 async function loadRegistry(api) {
+  const soft = p => p.catch(() => []);
   const [st, ar, dev, ent] = await Promise.all([
     api.request({ type: "get_states" }),
-    api.request({ type: "config/area_registry/list" }),
-    api.request({ type: "config/device_registry/list" }),
-    api.request({ type: "config/entity_registry/list" }),
+    soft(api.request({ type: "config/area_registry/list" })),
+    soft(api.request({ type: "config/device_registry/list" })),
+    soft(api.request({ type: "config/entity_registry/list" })),
   ]);
   states.clear(); st.forEach(s => states.set(s.entity_id, s));
   const devArea = new Map(dev.map(d => [d.id, d.area_id]));
@@ -1139,6 +1140,22 @@ function loadFromHass(ha) {
   });
   areas = Object.values(H.areas || {}).map(a => ({ area_id: a.area_id, name: a.name }));
 }
+function parentConn() {
+  try { const w = window.parent; if (w && w !== window && w.hassConnection && w.hassConnection.then) return w.hassConnection; } catch {}
+  return null;
+}
+async function startViaConn(promise) {
+  dbg("Modus: Anmeldung über hassConnection");
+  const { conn: c } = await promise;
+  const request = msg => c.sendMessagePromise(msg);
+  conn = { close() {}, call: (domain, service, data = {}, id) =>
+    request({ type: "call_service", domain, service, service_data: data, ...(id ? { target: { entity_id: id } } : {}) }).then(() => true, () => false) };
+  await loadRegistry({ request });
+  dbg("Geräte geladen: " + states.size);
+  await enableRemoteLayout(request);
+  tiles.clear(); closeSheet(); showApp();
+  try { await c.subscribeEvents(handleStateEvent, "state_changed"); } catch {}
+}
 async function startParent(ha) {
   dbg("Modus: Anmeldung über Dashboard");
   const request = msg => ha.hass.callWS(msg);
@@ -1297,6 +1314,9 @@ function startDemo() {
   const ph = parentHA();
   dbg("Dashboard gefunden: " + !!ph);
   if (ph && !isDemo) return startParent(ph).catch(e => showSetup("Anmeldung über das Dashboard fehlgeschlagen (" + (e && e.message || e) + "). Bitte Adresse und Token eingeben."));
+  const pc = parentConn();
+  dbg("hassConnection gefunden: " + !!pc);
+  if (pc && !isDemo) return startViaConn(pc).catch(e => showSetup("Anmeldung über das Dashboard fehlgeschlagen (" + (e && e.message || e) + "). Bitte Adresse und Token eingeben."));
   if (typeof DEMO_ONLY !== "undefined" || new URLSearchParams(location.search).has("demo")) return startDemo();
   // Zugangsdaten aus der Adresse (#url=…&token=…), z. B. wenn HomeView als iframe eingebettet ist
   const hp = new URLSearchParams(location.hash.slice(1));

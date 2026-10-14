@@ -12,7 +12,14 @@
   L.push("Browser: " + navigator.userAgent);
   L.push("Adresse: " + location.href);
   let real = null;
-  try { real = window.parent !== window ? window.parent.document.querySelector("home-assistant") : null; } catch (e) { L.push("Zugriff aufs Dashboard blockiert: " + e.name); }
+  L.push("Im Rahmen (iframe): " + (window.parent !== window ? "ja" : "NEIN, direkt geöffnet"));
+  try {
+    const pd = window.parent.document;
+    real = window.parent !== window ? pd.querySelector("home-assistant") : null;
+    if (window.parent !== window) L.push("Oberste Elemente im Dashboard: " + Array.from(pd.body.children).map(e => e.tagName.toLowerCase()).slice(0, 8).join(", "));
+    if (window.parent !== window) L.push("hassConnection im Dashboard: " + (window.parent.hassConnection ? "vorhanden" : "fehlt"));
+    if (window.parent.hassConnection) window.hassConnection = window.parent.hassConnection;
+  } catch (e) { L.push("Zugriff aufs Dashboard blockiert: " + e.name); }
   L.push(real ? "Dashboard: gefunden, hass " + (real.hass ? "vorhanden" : "FEHLT") : "Dashboard: nicht gefunden (direkter Aufruf oder blockiert)");
   if (real && real.hass) {
     const H = real.hass, dom = {};
