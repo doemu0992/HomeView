@@ -1,0 +1,13 @@
+# Variante mit Datei: dist/homeview.html nach /config/www/homeview.html kopieren.
+# Kein Token und keine Adresse nötig, HomeView nutzt die Anmeldung von Home Assistant.
+title: HomeView
+views:
+  - title: HomeView
+    path: homeview
+    panel: true
+    cards:
+      - type: iframe
+        aspect_ratio: 100%
+        allow: fullscreen
+        # Optional hinter /local/homeview.html anhängen: #kiosk=1  und/oder  #chips=1  (z. B. #kiosk=1&chips=1)
+        url: /local/homeview.html

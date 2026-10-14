@@ -36,6 +36,14 @@ views:
         aspect_ratio: 100%
 ```
 
+## Anmeldung
+
+Liegt `homeview.html` unter `/config/www/` und wird per iframe-Karte (`/local/homeview.html`) eingebunden, nutzt HomeView automatisch die Anmeldung des Dashboards: kein Token, keine Adresse. Beispiel: `dist/homeview-dashboard-lokal.yaml`.
+
+## Chips
+
+Mit `#chips=1` an der Adresse zeigt jeder Raum oben eine Chip-Leiste (Temperatur, Luftfeuchte, Lichter, offene Fenster/Türen, Schlösser, Medien, Alarm, Energie).
+
 ## Kiosk-Modus
 
 Der Knopf „Kiosk“ oben rechts startet den Vollbildmodus und blendet Bearbeiten-Elemente aus. Beenden: Uhrzeit 2 Sekunden gedrückt halten (oder Esc). Mit `&kiosk=1` am Ende der Adresse startet die Anzeige direkt im Kiosk-Modus (ohne Vollbild, das braucht einen Tipp).

@@ -86,6 +86,7 @@ const nameOf = s => s.attributes.friendly_name || s.entity_id;
 function pushState(s) {
   states.set(s.entity_id, s);
   tiles.get(s.entity_id)?.update(s);
+  scheduleChips();
   if (sheetCtx && sheetCtx.id === s.entity_id) sheetCtx.update(s);
 }
 
@@ -742,6 +743,7 @@ function decorate(id, t) {
 /* ---------- Darstellung ---------- */
 let rafGrid = 0;
 function renderGrid() {
+  scheduleChips();
   cancelAnimationFrame(rafGrid);
   rafGrid = requestAnimationFrame(() => {
     const els = visibleIds().map(id => {
@@ -973,6 +975,64 @@ function renderHeader() {
 }
 setInterval(() => $("app").hidden || renderHeader(), 15000);
 
+
+/* ---------- Chips: Übersicht pro Raum (Temperatur, Feuchte, Lichter, Fenster, …) ---------- */
+const CHIPS_ON = typeof DEMO_ONLY !== "undefined" || new URLSearchParams(location.search).has("demo") || new URLSearchParams(location.hash.slice(1)).get("chips") === "1";
+const OUTDOOR = /außen|garten|terrasse|balkon|outdoor/i;
+const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
+let chipRaf = 0;
+const scheduleChips = () => { if (CHIPS_ON) { cancelAnimationFrame(chipRaf); chipRaf = requestAnimationFrame(renderChips); } };
+function renderChips() {
+  const box = $("chips");
+  if (!CHIPS_ON || $("app").hidden) { box.hidden = true; return; }
+  const members = roomMembers(room).map(id => states.get(id));
+  const inRoom = id => room === HOME || entityArea.get(id) === room || members.some(m => m.entity_id === id);
+  const pool = room === HOME ? [...states.values()] : [...new Map([...members, ...[...states.values()].filter(s => entityArea.get(s.entity_id) === room)].map(s => [s.entity_id, s])).values()];
+  const dom = d => pool.filter(s => domainOf(s.entity_id) === d && s.state !== "unavailable");
+  const areaName = id => areas.find(a => a.area_id === entityArea.get(id))?.name || "";
+  const indoor = s => room !== HOME || !OUTDOOR.test(areaName(s.entity_id));
+  const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+  const chips = [];
+  const add = (kind, iconKey, text, { cls = "", on } = {}) => chips.push({ kind, iconKey, text, cls, on });
+
+  const climates = dom("climate").filter(s => indoor(s) && s.attributes.current_temperature != null);
+  const tSensors = dom("sensor").filter(s => s.attributes.device_class === "temperature" && indoor(s) && num(s.state) != null);
+  const temps = [...climates.map(s => s.attributes.current_temperature), ...tSensors.map(s => num(s.state))];
+  if (temps.length) add("temp", "thermo", fmt(avg(temps)) + "°", { on: climates[0] ? () => openSheet(climates[0].entity_id) : null });
+  const hums = [...dom("sensor").filter(s => s.attributes.device_class === "humidity" && indoor(s) && num(s.state) != null).map(s => num(s.state)),
+    ...climates.filter(s => s.attributes.current_humidity != null).map(s => s.attributes.current_humidity)];
+  if (hums.length) add("hum", "drop", Math.round(avg(hums)) + " %");
+  const heating = dom("climate").filter(s => s.attributes.hvac_action === "heating");
+  if (heating.length) add("heat", "thermo", "Heizt", { cls: "active" });
+
+  const lights = dom("light"), lOn = lights.filter(s => s.state === "on");
+  if (lights.length) add("lights", "light", lOn.length ? `${lOn.length} ${lOn.length === 1 ? "Licht" : "Lichter"} an` : "Lichter aus", {
+    cls: lOn.length ? "active" : "",
+    on: () => lights.forEach(s => conn.call("light", lOn.length ? "turn_off" : "turn_on", {}, s.entity_id)) });
+
+  const openers = dom("binary_sensor").filter(s => ["door", "window", "opening", "garage_door"].includes(s.attributes.device_class) && s.state === "on");
+  if (openers.length) add("open", "door", openers.length === 1 ? `${nameOf(openers[0])} offen` : `${openers.length} offen`, { cls: "warn" });
+  const locks = dom("lock"), unlocked = locks.filter(s => s.state !== "locked");
+  if (locks.length) add("lock", "lock", unlocked.length ? (unlocked.length === 1 ? `${nameOf(unlocked[0])} offen` : `${unlocked.length} Schlösser offen`) : "Verriegelt", { cls: unlocked.length ? "warn" : "" });
+  const playing = dom("media_player").filter(s => s.state === "playing");
+  if (playing.length) add("media", "media", playing.length === 1 ? (playing[0].attributes.media_title || "Spielt") : `${playing.length} spielen`, { cls: "active" });
+  const alarm = dom("alarm_control_panel")[0];
+  if (alarm && room === HOME) add("alarm", "shield", ALARM[alarm.state] || alarm.state, { cls: alarm.state === "triggered" ? "warn" : alarm.state.startsWith("armed") ? "active" : "", on: () => openSheet(alarm.entity_id) });
+  const pw = room === HOME ? dom("sensor").find(s => s.attributes.device_class === "power" && num(s.state) != null) : null;
+  if (pw) { const w = num(pw.state), kw = (pw.attributes.unit_of_measurement || "W") === "W"; add("power", "power", kw ? fmt(w / 1000) + " kW" : fmt(w) + " " + pw.attributes.unit_of_measurement); }
+
+  box.hidden = !chips.length;
+  box.replaceChildren(...chips.map(c => {
+    const el = document.createElement(c.on ? "button" : "div");
+    if (c.on) { el.type = "button"; el.addEventListener("click", c.on); }
+    el.className = "chip " + c.cls + (c.on ? "" : " static");
+    el.dataset.kind = c.kind;
+    el.innerHTML = icon(c.iconKey);
+    el.append(h("span", "", c.text));
+    return el;
+  }));
+}
+
 /* ---------- Kiosk-Modus ---------- */
 let kiosk = false, fsActive = false, toastTimer;
 function toast(msg, ms = 5000) {
@@ -1015,6 +1075,60 @@ function showApp() {
   try { navigator.wakeLock?.request("screen").catch(() => {}); } catch {}
 }
 
+function handleStateEvent(ev) {
+  const { entity_id, new_state } = ev.data;
+  if (new_state) {
+    const known = states.has(entity_id);
+    pushState(new_state);
+    if (!known) { renderRooms(); renderGrid(); return; }
+    if (["weather", "climate"].includes(domainOf(entity_id))) renderHeader();
+  } else { states.delete(entity_id); tiles.delete(entity_id); renderGrid(); renderChips(); }
+}
+async function enableRemoteLayout(request) {
+  try {
+    const r = await request({ type: "frontend/get_user_data", key: "homeview_layout" });
+    if (r && r.value && typeof r.value === "object") layout = r.value;
+  } catch {}
+  let lt;
+  remoteSave = () => { clearTimeout(lt); lt = setTimeout(() => request({ type: "frontend/set_user_data", key: "homeview_layout", value: layout }).catch(() => {}), 400); };
+}
+
+/* Läuft HomeView als iframe unter /local/ in Home Assistant, nutzt es die bestehende Anmeldung des Dashboards: kein Token nötig */
+function parentHA() {
+  try {
+    if (window.parent === window) return null;
+    const ha = window.parent.document.querySelector("home-assistant");
+    return ha && ha.hass && ha.hass.callWS ? ha : null;
+  } catch { return null; }
+}
+function loadFromHass(ha) {
+  const H = ha.hass;
+  states.clear(); entityArea.clear();
+  const ents = H.entities || {}, devs = H.devices || {};
+  Object.values(H.states).forEach(s => {
+    const e = ents[s.entity_id];
+    if (e && (e.hidden || e.entity_category)) return;
+    states.set(s.entity_id, s);
+    const a = e && (e.area_id || (e.device_id && devs[e.device_id]?.area_id));
+    if (a) entityArea.set(s.entity_id, a);
+  });
+  areas = Object.values(H.areas || {}).map(a => ({ area_id: a.area_id, name: a.name }));
+}
+async function startParent(ha) {
+  const request = msg => ha.hass.callWS(msg);
+  conn = { close() {}, call: (domain, service, data = {}, id) =>
+    request({ type: "call_service", domain, service, service_data: data, ...(id ? { target: { entity_id: id } } : {}) }).then(() => true, () => false) };
+  loadFromHass(ha);
+  await enableRemoteLayout(request);
+  tiles.clear(); closeSheet(); showApp();
+  try { await ha.hass.connection.subscribeEvents(handleStateEvent, "state_changed"); } catch {}
+  // Sicherheitsnetz: Zustände regelmäßig mit Home Assistant abgleichen (z. B. nach Verbindungsabbruch)
+  setInterval(() => {
+    const H = ha.hass; if (!H) return;
+    Object.values(H.states).forEach(n => { const o = states.get(n.entity_id); if (o && o.last_updated !== n.last_updated) pushState(n); });
+  }, 30000);
+}
+
 function startLive({ url, token }) {
   haBase = url.replace(/\/+$/, "");
   conn = connectHA(url, token, {
@@ -1023,27 +1137,14 @@ function startLive({ url, token }) {
     async onReady(api) {
       try {
         await loadRegistry(api);
-        try {
-          const r = await api.request({ type: "frontend/get_user_data", key: "homeview_layout" });
-          if (r && r.value && typeof r.value === "object") layout = r.value;
-        } catch {}
-        let lt;
-        remoteSave = () => { clearTimeout(lt); lt = setTimeout(() => api.request({ type: "frontend/set_user_data", key: "homeview_layout", value: layout }).catch(() => {}), 400); };
+        await enableRemoteLayout(api.request);
         await api.subscribe();
         $("banner").hidden = true;
         tiles.clear(); closeSheet();
         showApp();
       } catch (e) { $("err").textContent = "Daten konnten nicht geladen werden."; }
     },
-    onEvent(ev) {
-      const { entity_id, new_state } = ev.data;
-      if (new_state) {
-        const known = states.has(entity_id);
-        pushState(new_state);
-        if (!known) { renderRooms(); renderGrid(); return; }
-        if (["weather", "climate"].includes(domainOf(entity_id))) renderHeader();
-      } else { states.delete(entity_id); tiles.delete(entity_id); renderGrid(); }
-    },
+    onEvent: handleStateEvent,
   });
 }
 
@@ -1090,6 +1191,9 @@ function startDemo() {
     S("camera.garten", "idle", { friendly_name: "Garten", supported_features: 3, entity_picture: demoFrame("Garten", 130) }),
     S("sensor.leistung", "1240", { friendly_name: "Energie jetzt", device_class: "power", unit_of_measurement: "W" }),
     S("sensor.temp_aussen", "13.4", { friendly_name: "Außentemperatur", device_class: "temperature", unit_of_measurement: "°C" }),
+    S("sensor.temp_kueche", "22.3", { friendly_name: "Temperatur Küche", device_class: "temperature", unit_of_measurement: "°C" }),
+    S("sensor.temp_schlaf", "19.2", { friendly_name: "Temperatur Schlafzimmer", device_class: "temperature", unit_of_measurement: "°C" }),
+    S("sensor.feuchte_schlaf", "52", { friendly_name: "Luftfeuchte Schlafzimmer", device_class: "humidity", unit_of_measurement: "%" }),
     S("sensor.feuchte_wz", "46", { friendly_name: "Luftfeuchte", device_class: "humidity", unit_of_measurement: "%" }),
     S("binary_sensor.fenster_wz", "on", { friendly_name: "Fenster Wohnzimmer", device_class: "window" }),
     S("binary_sensor.bewegung_flur", "off", { friendly_name: "Bewegung Flur", device_class: "motion" }),
@@ -1100,7 +1204,7 @@ function startDemo() {
   list.forEach(s => states.set(s.entity_id, s));
   areas = [{ area_id: "wz", name: "Wohnzimmer" }, { area_id: "ku", name: "Küche" }, { area_id: "sz", name: "Schlafzimmer" }, { area_id: "au", name: "Außen" }];
   Object.entries({ "climate.wohnzimmer": "wz", "light.stehlampe": "wz", "light.decke": "wz", "fan.ventilator": "wz", "sensor.feuchte_wz": "wz", "binary_sensor.fenster_wz": "wz",
-    "media_player.kueche": "ku", "light.kueche": "ku", "switch.kaffee": "ku", "light.bett": "sz", "humidifier.schlafzimmer": "sz",
+    "media_player.kueche": "ku", "sensor.temp_kueche": "ku", "sensor.temp_schlaf": "sz", "sensor.feuchte_schlaf": "sz", "light.kueche": "ku", "switch.kaffee": "ku", "light.bett": "sz", "humidifier.schlafzimmer": "sz",
     "lock.haustuer": "au", "camera.eingang": "au", "camera.garten": "au", "alarm_control_panel.haus": "au", "cover.rollo": "au", "sensor.temp_aussen": "au" }).forEach(([k, v]) => entityArea.set(k, v));
 
   const set = (id, state, extra = {}) => { const o = states.get(id); pushState({ ...o, state, attributes: { ...o.attributes, ...extra } }); };
@@ -1159,6 +1263,8 @@ function startDemo() {
 }
 
 (function init() {
+  const ph = parentHA();
+  if (ph && typeof DEMO_ONLY === "undefined" && !new URLSearchParams(location.search).has("demo")) return startParent(ph);
   if (typeof DEMO_ONLY !== "undefined" || new URLSearchParams(location.search).has("demo")) return startDemo();
   // Zugangsdaten aus der Adresse (#url=…&token=…), z. B. wenn HomeView als iframe eingebettet ist
   const hp = new URLSearchParams(location.hash.slice(1));
