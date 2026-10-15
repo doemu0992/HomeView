@@ -137,6 +137,7 @@ function hsToRgb([h, s]) {
 let conn = null;                    // { call(domain, service, data, entity_id), close() }
 const states = new Map();
 const extras = new Map();            // Konfigurations-/Diagnose-Entitäten (keine Kacheln, aber in den Detailfenstern nutzbar)
+const entityPlatform = new Map();    // entity_id -> Integration (z. B. dreame_vacuum, roborock, matter)
 const entityDevice = new Map();      // entity_id -> device_id
 const ignored = new Set();           // ausgeblendete/deaktivierte Entitäten           // entity_id -> state object
 let areas = [];
@@ -215,9 +216,10 @@ async function loadRegistry(api) {
   ]);
   states.clear(); st.forEach(s => states.set(s.entity_id, s));
   const devArea = new Map(dev.map(d => [d.id, d.area_id]));
-  entityArea.clear(); extras.clear(); entityDevice.clear(); ignored.clear();
+  entityArea.clear(); extras.clear(); entityDevice.clear(); entityPlatform.clear(); ignored.clear();
   ent.forEach(e => {
     if (e.device_id) entityDevice.set(e.entity_id, e.device_id);
+    if (e.platform) entityPlatform.set(e.entity_id, e.platform);
     if (e.hidden_by || e.disabled_by || e.entity_category) {
       const s0 = states.get(e.entity_id);
       if (s0 && e.entity_category && !e.hidden_by && !e.disabled_by) extras.set(e.entity_id, s0); else ignored.add(e.entity_id);
@@ -295,6 +297,41 @@ function relatedControls(body, id) {
     ups.push(() => cells.forEach(([e, v]) => { const x = stateOf(e), n = parseFloat(x.state); v.textContent = (isNaN(n) ? x.state : fmt(n)) + (x.attributes.unit_of_measurement ? " " + x.attributes.unit_of_measurement : ""); }));
   }
   return { ids: new Set(ids), update: () => ups.forEach(f => f()) };
+}
+
+/* Räume eines Saugroboters: sucht in allen Attributen des Geräts und seiner Entitäten nach einer Raumliste */
+function extractRooms(attrs) {
+  const isRoom = o => o && typeof o === "object" && !Array.isArray(o) && (o.id != null || o.segment_id != null || o.room_id != null) && (o.name || o.label || o.room_name);
+  const toRoom = o => ({ id: o.id ?? o.segment_id ?? o.room_id, name: String(o.name || o.label || o.room_name) });
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (Array.isArray(v) && v.length && v.every(isRoom)) return { key: k, rooms: v.map(toRoom) };
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      const vals = Object.values(v), ents = Object.entries(v);
+      if (vals.length && vals.every(x => Array.isArray(x) && x.every(isRoom)) && vals.flat().length) return { key: k, rooms: vals.flat().map(toRoom) };
+      if (vals.length && vals.every(x => typeof x === "string") && ents.every(([i]) => /^\d+$/.test(i))) return { key: k, rooms: ents.map(([i, n]) => ({ id: Number(i), name: n })) };
+      if (vals.length && ents.every(([, x]) => x && typeof x === "object" && !Array.isArray(x) && (x.name || x.label))) return { key: k, rooms: ents.map(([i, x]) => ({ id: /^\d+$/.test(i) ? Number(i) : i, name: String(x.name || x.label) })) };
+    }
+  }
+  return null;
+}
+function findRooms(id) {
+  for (const e of [id, ...relatedIds(id)]) { const s = stateOf(e); const r = s && extractRooms(s.attributes); if (r) return { ...r, from: e }; }
+  return null;
+}
+async function cleanRooms(id, segs) {
+  const plat = entityPlatform.get(id) || "";
+  const tries = plat === "roborock" ? [["roborock", "vacuum_clean_segment", { segments: segs }]]
+    : plat.includes("dreame") ? [["dreame_vacuum", "vacuum_clean_segment", { segments: segs }]]
+    : plat === "xiaomi_miio" ? [["vacuum", "send_command", { command: "app_segment_clean", params: segs }]]
+    : [["dreame_vacuum", "vacuum_clean_segment", { segments: segs }], ["roborock", "vacuum_clean_segment", { segments: segs }], ["vacuum", "send_command", { command: "app_segment_clean", params: segs }]];
+  for (const [d, sv, data] of tries) if (await conn.call(d, sv, data, id)) return true;
+  return false;
+}
+function deviceDetails(id) {
+  const s = states.get(id), rel = relatedIds(id);
+  return ["Integration: " + (entityPlatform.get(id) || "unbekannt"), "Entität: " + id, "Funktionen (supported_features): " + s.attributes.supported_features,
+    "Attribute: " + Object.keys(s.attributes).join(", "), "", "Weitere Entitäten dieses Geräts (" + rel.length + "):",
+    ...rel.map(e => "  " + e + (entityPlatform.get(e) ? "  [" + entityPlatform.get(e) + "]" : "") + (extras.has(e) ? "  (Konfiguration/Diagnose)" : ""))].join("\n");
 }
 
 /* ---------- Detailfenster pro Gerätetyp ---------- */
@@ -430,26 +467,30 @@ const DETAIL = {
     if (has(512)) tr.push(["Suchen", () => call("locate", {})]);
     actions(body, tr);
     const sp = (a0.fan_speed_list || []).length ? seg(body, { label: "Saugstärke", options: a0.fan_speed_list.map(m => [m, label({}, m)]), on: v => call("set_fan_speed", { fan_speed: v }) }) : null;
-    // Räume (z. B. Dreame): Mehrfachauswahl und gezielt reinigen
-    const roomsOf = a => { const r = a.rooms; if (!r) return []; const list = Array.isArray(r) ? r : Object.values(r).flat(); return list.filter(x => x && x.id != null).map(x => ({ id: x.id, name: x.name || ("Raum " + x.id) })); };
+    // Räume: Mehrfachauswahl und gezielt reinigen (Raumliste wird in Attributen und verwandten Entitäten gesucht)
     const sel = new Set(); let roomBox = null, roomKey = "";
-    const msg = h("div", "info err");
+    const msg = h("div", "info err"), none = h("div", "info");
     const drawRooms = rooms => {
-      const key = JSON.stringify(rooms); if (key === roomKey) return; roomKey = key;
+      const key = JSON.stringify(rooms); if (key === roomKey) return; roomKey = key; none.hidden = true;
       if (!roomBox) { const w = h("div", "ctl"), r = h("div", "ctl-row"); r.append(h("span", "", "Räume")); w.append(r); roomBox = h("div", "seg"); w.append(roomBox); body.append(w);
         actions(body, [["Gewählte Räume reinigen", async () => { if (!sel.size) { msg.textContent = "Wähle zuerst mindestens einen Raum."; return; }
-          const ok = await conn.call("dreame_vacuum", "vacuum_clean_segment", { segments: [...sel] }, id);
+          const ok = await cleanRooms(id, [...sel]);
           msg.textContent = ok ? "" : "Raumreinigung wird von dieser Integration nicht unterstützt."; }]]); body.append(msg); }
       roomBox.replaceChildren(...rooms.map(r => { const b = h("button", "", r.name); b.type = "button"; b.setAttribute("aria-pressed", String(sel.has(r.id)));
         b.addEventListener("click", () => { sel.has(r.id) ? sel.delete(r.id) : sel.add(r.id); b.setAttribute("aria-pressed", String(sel.has(r.id))); msg.textContent = ""; }); return b; }));
     };
     const rel = relatedControls(body, id);
+    none.textContent = "Dein Roboter meldet Home Assistant keine Raumliste. Für die Raumauswahl braucht es eine Integration, die Räume liefert (zum Beispiel Dreame über HACS). Unter „Technische Details“ siehst du, was dein Roboter meldet.";
+    body.append(none);
+    const dt = h("button", "ghostbtn", "Technische Details"); dt.type = "button"; const pre = h("pre", "techpre"); pre.hidden = true;
+    dt.addEventListener("click", () => { pre.textContent = deviceDetails(id); pre.hidden = !pre.hidden; });
+    body.append(dt, pre);
     const upd = s => {
       const a = s.attributes, bat = a.battery_level;
       status.textContent = VAC[s.state] || s.state;
       sub.textContent = [bat != null ? `Akku ${bat} %` : "", a.status && String(a.status).toLowerCase() !== String(s.state).toLowerCase() ? a.status : ""].filter(Boolean).join(" · ");
       sp && sp.set(a.fan_speed);
-      const rooms = roomsOf(a); if (rooms.length) drawRooms(rooms);
+      const fr = findRooms(id); if (fr && fr.rooms.length) drawRooms(fr.rooms);
       rel.update();
     };
     upd.rel = rel.ids;
@@ -1487,11 +1528,12 @@ function parentHA() {
 function loadFromHass(ha) {
   dbg("hass.states: " + Object.keys(ha.hass.states || {}).length + ", areas: " + Object.keys(ha.hass.areas || {}).length + ", entities: " + Object.keys(ha.hass.entities || {}).length);
   const H = ha.hass;
-  states.clear(); entityArea.clear(); extras.clear(); entityDevice.clear(); ignored.clear();
+  states.clear(); entityArea.clear(); extras.clear(); entityDevice.clear(); entityPlatform.clear(); ignored.clear();
   const ents = H.entities || {}, devs = H.devices || {};
   Object.values(H.states).forEach(s => {
     const e = ents[s.entity_id];
     if (e && e.device_id) entityDevice.set(s.entity_id, e.device_id);
+    if (e && e.platform) entityPlatform.set(s.entity_id, e.platform);
     if (e && (e.hidden || e.entity_category)) { if (e.entity_category && !e.hidden) extras.set(s.entity_id, s); else ignored.add(s.entity_id); return; }
     states.set(s.entity_id, s);
     const a = e && (e.area_id || (e.device_id && devs[e.device_id]?.area_id));

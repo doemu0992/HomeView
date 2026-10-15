@@ -365,3 +365,6 @@ main{flex:1}
 .icon-group-title{font-size:1.05rem;color:var(--ink-2);font-weight:600;padding-top:.5rem}
 .tile.on:not(.noanim) .ic[data-icon="floorlamp"],.tile.on:not(.noanim) .ic[data-icon="pendant"],.tile.on:not(.noanim) .ic[data-icon="ceiling"],.tile.on:not(.noanim) .ic[data-icon="spot"],.tile.on:not(.noanim) .ic[data-icon="wall"],.tile.on:not(.noanim) .ic[data-icon="strip"],.tile.on:not(.noanim) .ic[data-icon="lights"],.tile.on:not(.noanim) .ic[data-icon="lantern"],.tile.on:not(.noanim) .ic[data-icon="chandelier"],.tile.on:not(.noanim) .ic[data-icon="flood"]{animation:hv-glow 2.8s ease-in-out infinite}
 .tile.on:not(.noanim) .ic[data-icon="candle"]{animation:hv-flicker 1.4s ease-in-out infinite}
+
+.ghostbtn{border:0;border-radius:99px;padding:.6rem 1.2rem;font-size:1.05rem;font-weight:600;background:rgba(255,255,255,.1);color:var(--ink-2);cursor:pointer;justify-self:start}
+.techpre{margin:0;padding:.8rem 1rem;border-radius:1rem;background:rgba(0,0,0,.35);color:#cfe;font:.95rem/1.4 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-word;user-select:text}
