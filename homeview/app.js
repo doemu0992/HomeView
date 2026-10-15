@@ -135,7 +135,10 @@ function hsToRgb([h, s]) {
 
 /* ---------- Zustand ---------- */
 let conn = null;                    // { call(domain, service, data, entity_id), close() }
-const states = new Map();           // entity_id -> state object
+const states = new Map();
+const extras = new Map();            // Konfigurations-/Diagnose-Entitäten (keine Kacheln, aber in den Detailfenstern nutzbar)
+const entityDevice = new Map();      // entity_id -> device_id
+const ignored = new Set();           // ausgeblendete/deaktivierte Entitäten           // entity_id -> state object
 let areas = [];
 const entityArea = new Map();
 let room = HOME;
@@ -151,11 +154,15 @@ const nameOf = s => {
   return (o && o.name) || s.attributes.friendly_name || s.entity_id;
 };
 
+function notifyRelated(id) {
+  if (sheetCtx && sheetCtx.rel && sheetCtx.rel.has(id) && states.has(sheetCtx.id)) sheetCtx.update(states.get(sheetCtx.id));
+}
 function pushState(s) {
   states.set(s.entity_id, s);
   tiles.get(s.entity_id)?.update(s);
   scheduleChips();
   if (sheetCtx && sheetCtx.id === s.entity_id) sheetCtx.update(s);
+  notifyRelated(s.entity_id);
 }
 
 /* ---------- Home-Assistant-Verbindung ---------- */
@@ -208,9 +215,14 @@ async function loadRegistry(api) {
   ]);
   states.clear(); st.forEach(s => states.set(s.entity_id, s));
   const devArea = new Map(dev.map(d => [d.id, d.area_id]));
-  entityArea.clear();
+  entityArea.clear(); extras.clear(); entityDevice.clear(); ignored.clear();
   ent.forEach(e => {
-    if (e.hidden_by || e.disabled_by || e.entity_category) states.delete(e.entity_id);
+    if (e.device_id) entityDevice.set(e.entity_id, e.device_id);
+    if (e.hidden_by || e.disabled_by || e.entity_category) {
+      const s0 = states.get(e.entity_id);
+      if (s0 && e.entity_category && !e.hidden_by && !e.disabled_by) extras.set(e.entity_id, s0); else ignored.add(e.entity_id);
+      states.delete(e.entity_id);
+    }
     const a = e.area_id || devArea.get(e.device_id);
     if (a) entityArea.set(e.entity_id, a);
   });
@@ -249,6 +261,41 @@ function actions(parent, items) {
   parent.append(box);
 }
 const onOff = (parent, text, on) => seg(parent, { label: text, options: [[true, "An"], [false, "Aus"]], on });
+
+/* ---------- Weitere Einstellungen desselben Geräts (Auswahlfelder, Regler, Schalter, Messwerte) ---------- */
+const stateOf = e => states.get(e) || extras.get(e);
+function relatedIds(id) {
+  const dev = entityDevice.get(id); if (!dev) return [];
+  return [...entityDevice].filter(([e, d]) => d === dev && e !== id && stateOf(e)).map(x => x[0]);
+}
+function relatedControls(body, id) {
+  const main = states.get(id), ids = relatedIds(id), ups = [], sensors = [], buttons = [];
+  const esc = t => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const strip = n => { const x = n.replace(new RegExp("^" + esc(nameOf(main)) + "\\s*", "i"), "").trim(); return x ? x.charAt(0).toUpperCase() + x.slice(1) : n; };
+  ids.forEach(e => {
+    const s = stateOf(e), d = domainOf(e), nm = strip(s.attributes.friendly_name || e);
+    if (d === "select" || d === "input_select") {
+      const opts = s.attributes.options || []; if (!opts.length) return;
+      const sg = seg(body, { label: nm, options: opts.map(o => [o, o]), on: v => conn.call(d, "select_option", { option: v }, e) });
+      ups.push(() => sg.set(stateOf(e).state));
+    } else if (d === "number" || d === "input_number") {
+      const a = s.attributes, u = a.unit_of_measurement ? " " + a.unit_of_measurement : "";
+      const sl = slider(body, { label: nm, min: a.min ?? 0, max: a.max ?? 100, step: a.step || 1, fmt: x => fmt(x) + u, on: v => conn.call(d, "set_value", { value: v }, e) });
+      ups.push(() => sl.set(parseFloat(stateOf(e).state)));
+    } else if (d === "switch" || d === "input_boolean") {
+      const sg = onOff(body, nm, v => conn.call(d, v ? "turn_on" : "turn_off", {}, e));
+      ups.push(() => sg.set(stateOf(e).state === "on"));
+    } else if (d === "button" || d === "input_button") buttons.push([nm, () => conn.call(d, "press", {}, e)]);
+    else if (d === "sensor" && s.state !== "unavailable") sensors.push(e);
+  });
+  if (buttons.length) actions(body, buttons);
+  if (sensors.length) {
+    const g = h("div", "wgrid"); body.append(g);
+    const cells = sensors.slice(0, 8).map(e => { const c = h("div", "wcell"), v = h("b"); c.append(h("span", "", strip(stateOf(e).attributes.friendly_name || e)), v); g.append(c); return [e, v]; });
+    ups.push(() => cells.forEach(([e, v]) => { const x = stateOf(e), n = parseFloat(x.state); v.textContent = (isNaN(n) ? x.state : fmt(n)) + (x.attributes.unit_of_measurement ? " " + x.attributes.unit_of_measurement : ""); }));
+  }
+  return { ids: new Set(ids), update: () => ups.forEach(f => f()) };
+}
 
 /* ---------- Detailfenster pro Gerätetyp ---------- */
 const DETAIL = {
@@ -373,11 +420,40 @@ const DETAIL = {
   },
 
   vacuum(id, body, call) {
-    const a0 = states.get(id).attributes;
-    actions(body, [["Start", () => call("start", {})], ["Pause", () => call("pause", {})], ["Zur Station", () => call("return_to_base", {})], ["Suchen", () => call("locate", {})]]);
+    const a0 = states.get(id).attributes, f = a0.supported_features, has = bit => f == null || (f & bit) !== 0;
+    const status = h("div", "info big"), sub = h("div", "info"); sub.style.textAlign = "center"; body.append(status, sub);
+    const tr = [];
+    if (has(8192) || has(1)) tr.push(["Start", () => call("start", {})]);
+    if (has(4)) tr.push(["Pause", () => call("pause", {})]);
+    if (has(8)) tr.push(["Stopp", () => call("stop", {})]);
+    if (has(16)) tr.push(["Zur Station", () => call("return_to_base", {})]);
+    if (has(512)) tr.push(["Suchen", () => call("locate", {})]);
+    actions(body, tr);
     const sp = (a0.fan_speed_list || []).length ? seg(body, { label: "Saugstärke", options: a0.fan_speed_list.map(m => [m, label({}, m)]), on: v => call("set_fan_speed", { fan_speed: v }) }) : null;
-    const info = h("div", "info"); body.append(info);
-    return s => { sp && sp.set(s.attributes.fan_speed); info.textContent = s.attributes.battery_level != null ? `Akku ${s.attributes.battery_level} %` : ""; };
+    // Räume (z. B. Dreame): Mehrfachauswahl und gezielt reinigen
+    const roomsOf = a => { const r = a.rooms; if (!r) return []; const list = Array.isArray(r) ? r : Object.values(r).flat(); return list.filter(x => x && x.id != null).map(x => ({ id: x.id, name: x.name || ("Raum " + x.id) })); };
+    const sel = new Set(); let roomBox = null, roomKey = "";
+    const msg = h("div", "info err");
+    const drawRooms = rooms => {
+      const key = JSON.stringify(rooms); if (key === roomKey) return; roomKey = key;
+      if (!roomBox) { const w = h("div", "ctl"), r = h("div", "ctl-row"); r.append(h("span", "", "Räume")); w.append(r); roomBox = h("div", "seg"); w.append(roomBox); body.append(w);
+        actions(body, [["Gewählte Räume reinigen", async () => { if (!sel.size) { msg.textContent = "Wähle zuerst mindestens einen Raum."; return; }
+          const ok = await conn.call("dreame_vacuum", "vacuum_clean_segment", { segments: [...sel] }, id);
+          msg.textContent = ok ? "" : "Raumreinigung wird von dieser Integration nicht unterstützt."; }]]); body.append(msg); }
+      roomBox.replaceChildren(...rooms.map(r => { const b = h("button", "", r.name); b.type = "button"; b.setAttribute("aria-pressed", String(sel.has(r.id)));
+        b.addEventListener("click", () => { sel.has(r.id) ? sel.delete(r.id) : sel.add(r.id); b.setAttribute("aria-pressed", String(sel.has(r.id))); msg.textContent = ""; }); return b; }));
+    };
+    const rel = relatedControls(body, id);
+    const upd = s => {
+      const a = s.attributes, bat = a.battery_level;
+      status.textContent = VAC[s.state] || s.state;
+      sub.textContent = [bat != null ? `Akku ${bat} %` : "", a.status && String(a.status).toLowerCase() !== String(s.state).toLowerCase() ? a.status : ""].filter(Boolean).join(" · ");
+      sp && sp.set(a.fan_speed);
+      const rooms = roomsOf(a); if (rooms.length) drawRooms(rooms);
+      rel.update();
+    };
+    upd.rel = rel.ids;
+    return upd;
   },
 
   alarm_control_panel(id, body, call) {
@@ -457,7 +533,7 @@ function openSheet(id) {
   const domain = domainOf(id);
   $("sheet").dataset.kind = domain;
   const upd = d(id, body, (service, data) => conn.call(domain, service, data, id));
-  sheetCtx = { id, update: upd }; upd(s);
+  sheetCtx = { id, update: upd, rel: upd.rel }; upd(s);
   actions(body, [["Name und Symbol ändern", () => openEntityPanel(id)]]);
   $("sheet").hidden = false; $("sheetClose").focus();
 }
@@ -1383,6 +1459,8 @@ function showApp() {
 function handleStateEvent(ev) {
   const { entity_id, new_state } = ev.data;
   if (new_state) {
+    if (extras.has(entity_id)) { extras.set(entity_id, new_state); notifyRelated(entity_id); return; }
+    if (ignored.has(entity_id)) return;
     const known = states.has(entity_id);
     pushState(new_state);
     if (!known) { renderRooms(); renderGrid(); return; }
@@ -1409,11 +1487,12 @@ function parentHA() {
 function loadFromHass(ha) {
   dbg("hass.states: " + Object.keys(ha.hass.states || {}).length + ", areas: " + Object.keys(ha.hass.areas || {}).length + ", entities: " + Object.keys(ha.hass.entities || {}).length);
   const H = ha.hass;
-  states.clear(); entityArea.clear();
+  states.clear(); entityArea.clear(); extras.clear(); entityDevice.clear(); ignored.clear();
   const ents = H.entities || {}, devs = H.devices || {};
   Object.values(H.states).forEach(s => {
     const e = ents[s.entity_id];
-    if (e && (e.hidden || e.entity_category)) return;
+    if (e && e.device_id) entityDevice.set(s.entity_id, e.device_id);
+    if (e && (e.hidden || e.entity_category)) { if (e.entity_category && !e.hidden) extras.set(s.entity_id, s); else ignored.add(s.entity_id); return; }
     states.set(s.entity_id, s);
     const a = e && (e.area_id || (e.device_id && devs[e.device_id]?.area_id));
     if (a) entityArea.set(s.entity_id, a);
@@ -1512,7 +1591,8 @@ function startDemo() {
     S("media_player.kueche", "playing", { friendly_name: "Küche", media_title: "Abendstimmung", media_artist: "Küche · HomePod", volume_level: 0.35, is_volume_muted: false,
       source_list: ["AirPlay", "Radio", "Bluetooth"], source: "AirPlay", shuffle: false, supported_features: 0xFFFF }),
     S("humidifier.schlafzimmer", "on", { friendly_name: "Luftbefeuchter", humidity: 50, min_humidity: 30, max_humidity: 70, available_modes: ["normal", "sleep", "boost"], mode: "normal" }),
-    S("vacuum.robbi", "docked", { friendly_name: "Saugroboter", battery_level: 100, fan_speed_list: ["leise", "normal", "stark"], fan_speed: "normal" }),
+    S("vacuum.robbi", "docked", { friendly_name: "Dreame X50 Ultra", battery_level: 100, status: "Batterie wird geladen", fan_speed_list: ["Leise", "Schnell", "Tiefenreinigung", "Automatisch"], fan_speed: "Automatisch",
+      rooms: { Erdgeschoss: [{ id: 1, name: "Wohnzimmer" }, { id: 2, name: "Küche" }, { id: 3, name: "Flur" }, { id: 4, name: "Bad" }] } }),
     S("alarm_control_panel.haus", "disarmed", { friendly_name: "Alarmanlage", code_format: "number", code_arm_required: false, supported_features: 63 }),
     S("camera.eingang", "streaming", { friendly_name: "Eingang", supported_features: 3, entity_picture: demoFrame("Eingang", 205) }),
     S("camera.garten", "idle", { friendly_name: "Garten", supported_features: 3, entity_picture: demoFrame("Garten", 130) }),
@@ -1529,12 +1609,25 @@ function startDemo() {
     S("button.klingel_test", "unknown", { friendly_name: "Klingel testen" }),
   ];
   list.forEach(s => states.set(s.entity_id, s));
+  // Weitere Entitäten desselben Geräts (in Home Assistant meist als „Konfiguration“/„Diagnose“ versteckt)
+  [S("select.dreame_reinigungsmodus", "Saugen und Wischen", { friendly_name: "Dreame X50 Ultra Reinigungsmodus", options: ["Staubsauger", "Wischen", "Saugen und Wischen"] }),
+   S("select.dreame_wassermenge", "Mittel", { friendly_name: "Dreame X50 Ultra Wassermenge", options: ["Niedrig", "Mittel", "Hoch"] }),
+   S("switch.dreame_teppich", "on", { friendly_name: "Dreame X50 Ultra Teppich erkennen" }),
+   S("button.dreame_station", "unknown", { friendly_name: "Dreame X50 Ultra Station leeren" }),
+   S("sensor.dreame_flaeche", "42", { friendly_name: "Dreame X50 Ultra Gereinigte Fläche", unit_of_measurement: "m²" }),
+   S("sensor.dreame_zeit", "35", { friendly_name: "Dreame X50 Ultra Reinigungszeit", unit_of_measurement: "min" }),
+   S("sensor.dreame_filter", "78", { friendly_name: "Dreame X50 Ultra Filter", unit_of_measurement: "%" })]
+    .forEach(x => { extras.set(x.entity_id, x); entityDevice.set(x.entity_id, "dev_dreame"); });
+  entityDevice.set("vacuum.robbi", "dev_dreame");
   areas = [{ area_id: "wz", name: "Wohnzimmer" }, { area_id: "ku", name: "Küche" }, { area_id: "sz", name: "Schlafzimmer" }, { area_id: "au", name: "Außen" }, { area_id: "bu", name: "Büro" }];
   Object.entries({ "climate.wohnzimmer": "wz", "light.stehlampe": "wz", "light.decke": "wz", "fan.ventilator": "wz", "sensor.feuchte_wz": "wz", "binary_sensor.fenster_wz": "wz",
     "media_player.kueche": "ku", "sensor.temp_kueche": "ku", "sensor.temp_schlaf": "sz", "sensor.feuchte_schlaf": "sz", "light.kueche": "ku", "switch.kaffee": "ku", "light.bett": "sz", "light.luefter_bad": "sz", "humidifier.schlafzimmer": "sz",
     "lock.haustuer": "au", "camera.eingang": "au", "camera.garten": "au", "alarm_control_panel.haus": "au", "cover.rollo": "au", "sensor.temp_aussen": "au" }).forEach(([k, v]) => entityArea.set(k, v));
 
-  const set = (id, state, extra = {}) => { const o = states.get(id); pushState({ ...o, state, attributes: { ...o.attributes, ...extra } }); };
+  const set = (id, state, extra = {}) => {
+    const o = states.get(id) || extras.get(id), n = { ...o, state, attributes: { ...o.attributes, ...extra } };
+    if (states.has(id)) pushState(n); else { extras.set(id, n); notifyRelated(id); }
+  };
   const at = id => states.get(id).attributes, st = id => states.get(id).state;
   const SVC = {
     "light.toggle": id => set(id, st(id) === "on" ? "off" : "on", st(id) === "off" && !at(id).brightness ? { brightness: 255 } : {}),
@@ -1579,6 +1672,10 @@ function startDemo() {
     "input_number.set_value": (id, d) => set(id, String(d.value)),
     "input_select.select_option": (id, d) => set(id, d.option),
     "button.press": () => {},
+    "select.select_option": (id, d) => set(id, d.option),
+    "switch.turn_on": id => set(id, "on"), "switch.turn_off": id => set(id, "off"),
+    "vacuum.stop": id => set(id, "idle"),
+    "dreame_vacuum.vacuum_clean_segment": id => set(id, "cleaning", { status: "Reinigt" }),
     "camera.turn_on": id => set(id, "idle"), "camera.turn_off": id => set(id, "off"),
     "alarm_control_panel.alarm_disarm": (id, d) => (d.code === "1234" ? set(id, "disarmed") : false),
     ...Object.fromEntries(["home", "away", "night", "vacation"].map(m => [`alarm_control_panel.alarm_arm_${m}`, id => {

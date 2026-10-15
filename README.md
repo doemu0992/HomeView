@@ -44,6 +44,10 @@ Home Assistant liefert Dateien aus `/www` mit langer Cache-Zeit aus. Nach jedem 
 
 Liegt `homeview.html` unter `/config/www/` und wird per iframe-Karte (`/local/homeview.html`) eingebunden, nutzt HomeView automatisch die Anmeldung des Dashboards: kein Token, keine Adresse. Beispiel: `dist/homeview-dashboard-lokal.yaml`.
 
+## Saugroboter
+
+Das Detailfenster zeigt Status und Akku, Start/Pause/Stopp/Zur Station/Suchen (je nach Funktion), Saugstärke und alle weiteren Einstellungen desselben Geräts: Auswahlfelder (z. B. Reinigungsmodus, Wassermenge), Regler, Schalter, Tasten (z. B. Station leeren) und Messwerte (gereinigte Fläche, Reinigungszeit, Filter). Bei der Dreame-Integration (HACS, Tasshack) kannst du außerdem einzelne Räume wählen und gezielt reinigen.
+
 ## Chips (standardmäßig an)
 
 Der Name entscheidet: Geräte mit „Lüfter“ oder „Ventilator“ im Namen zählen als Lüfter (eigener Chip „Lüfter an/aus“ mit drehendem Symbol), nicht als Licht, auch wenn Home Assistant sie als Licht führt.
