@@ -371,8 +371,6 @@ main{flex:1}
 
 /* Saugroboter-Fenster */
 .sheet[data-kind=vacuum] .sheet-card{width:min(46rem,100%)}
-.vhead{position:sticky;top:0;z-index:2;display:grid;gap:.8rem;padding-bottom:.9rem;margin-bottom:-.3rem;background:#29253d}
-.vstat{display:flex;align-items:center;gap:.6rem;font-size:1.25rem;color:var(--ink-2)}
 .vdot{width:.8rem;height:.8rem;border-radius:50%;background:#5be08a;flex:none}
 .vdot.run{animation:vac-pulse 1.4s ease-in-out infinite}.vdot.err{background:#ff6b5e}
 @keyframes vac-pulse{50%{opacity:.35}}
@@ -418,3 +416,53 @@ main{flex:1}
 .vlife[hidden]{display:none}
 .vlife i{display:block;height:100%;background:#34c759}.vlife.low i{background:#ffb54d}
 @media(max-width:560px){.vtwo{grid-template-columns:1fr}}
+
+/* ===== Detailfenster im Mockup-Stil (gilt für alle Geräte) ===== */
+.sheet-card{display:flex;flex-direction:column;gap:1.1rem;width:min(40rem,100%);border-radius:2rem;background:linear-gradient(160deg,#3a2a7a,#241748 60%);-webkit-backdrop-filter:none;backdrop-filter:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12),0 20px 60px rgba(0,0,0,.5)}
+.sheet[data-kind=vacuum] .sheet-card{width:min(46rem,100%)}
+.sheet-body{flex:1 1 auto}
+.sheet-head{justify-content:flex-start;gap:1rem}
+.sheet-ico{width:4rem;height:4rem;border-radius:50%;background:rgba(255,255,255,.14);display:grid;place-items:center;flex:none}
+.sheet-ico:empty{display:none}
+.sheet-ico .ic{width:2.1rem;height:2.1rem}
+.sheet-titles{flex:1;min-width:0}
+.sheet-title{font-size:1.7rem;font-weight:700;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sheet-sub{display:flex;align-items:center;flex-wrap:wrap;gap:.3rem .9rem;color:var(--ink-2);font-size:1.1rem}
+.sheet-sub:empty{display:none}
+#sheetClose{flex:none;width:3rem;height:3rem;background:rgba(255,255,255,.14);color:#fff}
+.vdot{display:inline-block;margin-right:.1rem}
+.sheet-sub .vdot{margin-right:-.4rem}
+.vbat{display:inline-flex;align-items:center;gap:.4rem}
+.vbat i{position:relative;display:inline-block;width:1.9rem;height:.8rem;border:2px solid var(--ink-2);border-radius:.3rem}
+.vbat i:after{content:"";position:absolute;left:1px;top:1px;bottom:1px;width:calc(var(--lv,50%) - 2px);background:#5be08a;border-radius:2px}
+.ctl-row{font-size:.82rem;letter-spacing:.08em;text-transform:uppercase;font-weight:500;color:var(--ink-2)}
+.ctl-v{font-size:1.1rem;letter-spacing:0;text-transform:none}
+.sheet-card .seg{gap:.3rem;padding:.3rem;border-radius:1.2rem;background:rgba(255,255,255,.08)}
+.sheet-card .seg button{border-radius:.95rem;background:none;padding:.7rem .8rem;font-size:1.05rem;font-weight:500;color:#fff}
+.sheet-card .seg button[aria-pressed="true"]{background:#fff;color:#241748;font-weight:600}
+.sheet-card .seg.eq button{min-width:0;overflow-wrap:anywhere;padding:.7rem .4rem}
+.sheet-card .seg button.ico{display:flex;flex-direction:column;align-items:center;gap:.3rem}
+.sheet-card .seg button.ico svg{width:1.7rem;height:1.7rem;opacity:.9}
+.sheet-card .actions{gap:.6rem}
+.sheet-card .actions button{border-radius:1.1rem;min-height:3.4rem;background:rgba(255,255,255,.1);font-weight:600}
+.sheet-card .actions .danger{background:rgba(255,69,58,.35)}
+.sheet-card .keypad button{border-radius:1.2rem}
+.sheet-card .vgrp{border-radius:1.2rem}
+.sheet-card .vbig{border-radius:1.2rem;display:flex;align-items:center;justify-content:center;gap:.6rem;background:rgba(255,255,255,.1)}
+.sheet-card .vbig svg{width:1.4rem;height:1.4rem;flex:none}
+.sheet-card .vbig.vgo{background:#8f7cff;color:#120c2a}
+.vhead{flex:none}
+.vmain{display:flex;gap:.6rem}
+.vmain .vbig{flex:1 1 0}.vmain .vbig.vgo{flex:2 1 0}
+.sheet-card .vsc{border-radius:1.1rem;padding:.7rem 1rem;font-weight:400}
+.sheet-card .vsc b{font-weight:600}
+.sheet-card .vroom{border-radius:1rem;position:relative;padding:.8rem 2.2rem .8rem .9rem;font-weight:600}
+.sheet-card .vroom[aria-pressed="true"]:after{content:"\2713";position:absolute;right:.9rem;top:.75rem;color:#b9acff;font-weight:700}
+.sheet-card .vtabs button{border-radius:1rem}
+.sheet-card .vtg{border-radius:1rem;padding:0}
+.sheet-card .vstep button{border-radius:50%;padding:0}
+.vlink{width:100%;border:0;border-top:1px solid rgba(255,255,255,.1);background:none;color:#fff;text-align:left;cursor:pointer}
+.sheet-card .vlink{border-radius:0;padding:.75rem 1rem;font-weight:400;font-size:1.15rem;background:none}
+.sheet-body{grid-auto-rows:max-content}
+.vtwo.one{grid-template-columns:1fr}
+#sheetClose:focus:not(:focus-visible){outline:none}

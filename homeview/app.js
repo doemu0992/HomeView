@@ -250,9 +250,10 @@ function slider(parent, { label: text, min, max, step = 1, fmt: f = x => x, grad
   return { w, inp, set(x) { if (x == null || Date.now() - touched < 1200) return; inp.value = x; show(); } };
 }
 function seg(parent, { label: text, options, on }) {
-  const { w } = ctl(parent, text), box = h("div", "seg");
-  const btns = options.map(([val, txt]) => {
-    const b = h("button", "", txt); b.type = "button"; b.addEventListener("click", () => on(val)); box.append(b); return [val, b];
+  const { w } = ctl(parent, text), box = h("div", "seg" + (options.length <= 4 ? " eq" : ""));
+  const btns = options.map(([val, txt, ico]) => {
+    const b = h("button", ico ? "ico" : "", ico ? "" : txt); b.type = "button";
+    if (ico) { b.innerHTML = ico; b.append(h("span", "", txt)); } b.addEventListener("click", () => on(val)); box.append(b); return [val, b];
   });
   w.append(box);
   return { w, set(cur) { btns.forEach(([val, b]) => b.setAttribute("aria-pressed", String(val === cur))); } };
@@ -262,7 +263,11 @@ function actions(parent, items) {
   items.forEach(([txt, fn]) => { const b = h("button", "", txt); b.type = "button"; b.addEventListener("click", fn); box.append(b); });
   parent.append(box);
 }
-const onOff = (parent, text, on) => seg(parent, { label: text, options: [[true, "An"], [false, "Aus"]], on });
+function onOff(parent, text, on) {
+  let g = parent.lastElementChild;
+  if (!g || !g.classList.contains("vgrp") || !g.dataset.sw) { g = vGroup(parent); g.dataset.sw = "1"; }
+  return vSwitch(g, text, on);
+}
 
 /* ---------- Weitere Einstellungen desselben Geräts (Auswahlfelder, Regler, Schalter, Messwerte) ---------- */
 const stateOf = e => states.get(e) || extras.get(e);
@@ -492,13 +497,16 @@ const DETAIL = {
       ups.push(() => sg.set(stateOf(e).state)); return sg; };
 
     /* Kopf: Status und Hauptknöpfe bleiben beim Scrollen stehen */
-    const head = h("div", "vhead"), stat = h("div", "vstat"), bar = h("div", "vmain");
-    head.append(stat, bar); body.append(head);
-    const vbtn = (txt, fn, cls) => { const b = h("button", "vbig" + (cls ? " " + cls : ""), txt); b.type = "button"; b.addEventListener("click", fn); bar.append(b); return b; };
-    const go = vbtn("Starten", () => { const st = states.get(id).state; if (st === "cleaning") call(has(4) ? "pause" : "stop", {}); else call("start", {}); }, "vgo");
-    const home = has(16) ? vbtn("Station", () => call("return_to_base", {})) : null;
-    const find = has(512) ? vbtn("Finden", () => call("locate", {})) : null;
-    const stop = has(8) ? vbtn("Stopp", () => call("stop", {})) : null;
+    const head = h("div", "vhead"), bar = h("div", "vmain");
+    head.append(bar); body.parentNode.insertBefore(head, body);
+    const SV = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+    const VI = { go: '<path d="M7 4l13 8-13 8z" fill="currentColor"/>', pause: '<path d="M8 5v14M16 5v14"/>', home: '<path d="M4 11l8-7 8 7v9H4z"/>', find: '<circle cx="12" cy="12" r="3"/><path d="M5 12a7 7 0 0 1 7-7M19 12a7 7 0 0 1-7 7"/>', stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>' };
+    const vbtn = (txt, ic, fn, cls) => { const b = h("button", "vbig" + (cls ? " " + cls : "")); b.type = "button"; b.innerHTML = SV(VI[ic]); b.append(h("span", "", txt)); b.addEventListener("click", fn); bar.append(b); return b; };
+    const setBtn = (b, txt, ic) => { b.firstChild.innerHTML = VI[ic]; b.lastChild.textContent = txt; };
+    const go = vbtn("Starten", "go", () => { const st = states.get(id).state; if (st === "cleaning") call(has(4) ? "pause" : "stop", {}); else if (sel.size && st !== "paused") cleanSel([...sel]); else call("start", {}); }, "vgo");
+    const home = has(16) ? vbtn("Station", "home", () => call("return_to_base", {})) : null;
+    const find = has(512) ? vbtn("Finden", "find", () => call("locate", {})) : null;
+    const stop = has(8) ? vbtn("Stopp", "stop", () => call("stop", {})) : null;
 
     /* Kurzbefehle */
     const cfg = cfgOf(); cfg.vac = cfg.vac || {};
@@ -515,7 +523,7 @@ const DETAIL = {
       if (sc.rooms && sc.rooms.length) await cleanSel(sc.rooms); else await call("start", {});
     };
     const scSec = h("div", "ctl"), scHead = h("div", "ctl-row"), scBox = h("div", "vchips"), scEdit = h("div", "vedit"); scEdit.hidden = true;
-    scHead.append(h("span", "", "Kurzbefehle"), h("span", "vhint", "lange drücken = bearbeiten")); scSec.append(scHead, scBox, scEdit); body.append(scSec);
+    scHead.append(h("span", "", "Kurzbefehle"), h("span", "", "lange drücken = bearbeiten")); scSec.append(scHead, scBox, scEdit); body.append(scSec);
     const closeEdit = () => { scEdit.hidden = true; scEdit.replaceChildren(); };
     const openEdit = idx => {
       const sc = idx == null ? null : list()[idx], inp = h("input", "textin"); inp.placeholder = "Name, zum Beispiel Küche jetzt"; inp.value = sc ? sc.name : ""; inp.setAttribute("aria-label", "Name des Kurzbefehls");
@@ -541,26 +549,26 @@ const DETAIL = {
 
     /* Modus, Saugkraft, Wassermenge */
     const eq = sg => { sg.w.querySelector(".seg").classList.add("eq"); return sg; };
-    if (modeE) eq(selSeg(body, modeE, "Reinigungsmodus"));
+    const MI = { sweeping: '<path d="M4 14c4-6 12-6 16 0M8 18h8"/>', mopping: '<path d="M12 3s6 6 6 10a6 6 0 0 1-12 0c0-4 6-10 6-10z"/>', sweeping_and_mopping: '<path d="M4 8c4-4 12-4 16 0M12 12s4 4 4 6a4 4 0 0 1-8 0c0-2 4-6 4-6z"/>', mopping_after_sweeping: '<path d="M5 7h14M5 12h14M5 17h9"/>' };
+    if (modeE) { const sg = seg(body, { label: "Reinigungsmodus", options: stateOf(modeE).attributes.options.map(o => [o, label(VAC_L, o), MI[o] ? SV(MI[o]) : null]), on: v => selCall(modeE, v) }); ups.push(() => sg.set(stateOf(modeE).state)); }
     const two = h("div", "vtwo"); body.append(two);
     if (suckE) eq(selSeg(two, suckE, "Saugkraft"));
     else if ((a0.fan_speed_list || []).length) { const sp = eq(seg(two, { label: "Saugkraft", options: a0.fan_speed_list.map(m => [m, label(VAC_L, m)]), on: v => call("set_fan_speed", { fan_speed: v }) })); ups.push(() => sp.set(states.get(id).attributes.fan_speed)); }
     if (waterE) eq(selSeg(two, waterE, "Wassermenge"));
-    if (!two.children.length) two.remove();
+    if (!two.children.length) two.remove(); else if ([...two.querySelectorAll(".seg")].some(x => x.children.length > 3)) two.classList.add("one");
 
     /* Räume als Kacheln */
-    const none = h("div", "info"); let roomSec = null, roomBox = null, roomKey = "", cnt = null, goRooms = null;
+    const none = h("div", "info"); let roomSec = null, roomBox = null, roomKey = "", cnt = null;
     const drawRooms = rs => {
       const key = JSON.stringify(rs); if (key === roomKey) return; roomKey = key; rooms = rs; none.hidden = true;
       if (!roomSec) {
-        roomSec = h("div", "ctl"); const r = h("div", "ctl-row"); cnt = h("span", "vhint", "alle"); r.append(h("span", "", "Räume"), cnt);
+        roomSec = h("div", "ctl"); const r = h("div", "ctl-row"); cnt = h("span", "", "alle"); r.append(h("span", "", "Räume"), cnt);
         roomBox = h("div", "vrooms"); roomSec.append(r, roomBox); body.insertBefore(roomSec, none);
-        goRooms = h("button", "vbig vgo", "Gewählte Räume reinigen"); goRooms.type = "button"; goRooms.hidden = true; goRooms.addEventListener("click", () => cleanSel([...sel]));
-        body.insertBefore(goRooms, none); body.insertBefore(msg, none);
+        body.insertBefore(msg, none);
       }
       roomBox.replaceChildren(...rs.map(r => { const b = h("button", "vroom", r.name); b.type = "button"; b.setAttribute("aria-pressed", String(sel.has(r.id)));
         b.addEventListener("click", () => { sel.has(r.id) ? sel.delete(r.id) : sel.add(r.id); b.setAttribute("aria-pressed", String(sel.has(r.id))); msg.textContent = "";
-          cnt.textContent = sel.size ? sel.size + " gewählt" : "alle"; goRooms.hidden = !sel.size; }); return b; }));
+          cnt.textContent = sel.size ? sel.size + " gewählt" : "alle"; }); return b; }));
       drawSc();
     };
     none.textContent = entityPlatform.get(id) === "matter"
@@ -581,13 +589,14 @@ const DETAIL = {
     ids.forEach(e => {
       if (e === waterE || e === suckE || e === modeE) return;
       const s = stateOf(e), d = domainOf(e), a = s.attributes, pane = STATION.test(txt(e)) ? pSta : pSet, stn = pane === pSta;
-      if (isSel(e)) selSeg(gOf(pane, "s" + stn, stn ? "Station" : "Auswahl"), e);
+      const hum = /feucht|humid/.test(txt(e)), sTitle = hum ? "Feuchtigkeit" : "Selbstreinigung und Station";
+      if (isSel(e)) selSeg(gOf(pane, "s" + stn, stn ? sTitle : "Auswahl"), e);
       else if (d === "number" || d === "input_number") {
         const u = a.unit_of_measurement ? " " + a.unit_of_measurement : "", mn = a.min ?? 0, mx = a.max ?? 100, raw = a.step || 1;
-        const w = vStep(gOf(pane, "n" + stn, stn ? "Station" : "Werte"), nm(e), { min: mn, max: mx, step: mx - mn >= 50 ? Math.max(raw, 5) : raw, unit: u, on: v => conn.call(d, "set_value", { value: v }, e) });
+        const w = vStep(gOf(pane, "n" + stn + (stn ? hum : ""), stn ? sTitle : "Werte"), nm(e), { min: mn, max: mx, step: mx - mn >= 50 ? Math.max(raw, 5) : raw, unit: u, on: v => conn.call(d, "set_value", { value: v }, e) });
         ups.push(() => w.set(parseFloat(stateOf(e).state)));
       } else if (d === "switch" || d === "input_boolean") {
-        const w = vSwitch(gOf(pane, "t" + stn, stn ? "Station" : "Schnell umschalten"), nm(e), v => conn.call(d, v ? "turn_on" : "turn_off", {}, e));
+        const w = vSwitch(gOf(pane, "t" + stn + (stn ? hum : ""), stn ? sTitle : "Schnell umschalten"), nm(e), v => conn.call(d, v ? "turn_on" : "turn_off", {}, e));
         ups.push(() => w.set(stateOf(e).state === "on"));
       } else if (d === "button" || d === "input_button") buttons.push([nm(e), () => conn.call(d, "press", {}, e)]);
       else if (d === "sensor" && s.state !== "unavailable") (CONS.test(txt(e)) && a.unit_of_measurement && !STATION.test(txt(e)) ? wear : other).push(e);
@@ -596,26 +605,28 @@ const DETAIL = {
       const r = h("div", "vrow"), life = h("span", "vlife"), bar2 = h("i"), v = h("span", "vv"); life.append(bar2); r.append(h("span", "vn", nm(e)), life, v); g.append(r);
       ups.push(() => { const x = stateOf(e), n = parseFloat(x.state), u = x.attributes.unit_of_measurement; v.textContent = (isNaN(n) ? x.state : fmt(n)) + " " + u;
         const pct = u === "%" && !isNaN(n); life.hidden = !pct; if (pct) { bar2.style.width = Math.max(0, Math.min(100, n)) + "%"; life.classList.toggle("low", n < 20); } }); }); }
-    if (other.length) { const g = h("div", "wgrid"); pInf.append(g);
-      const cells = other.slice(0, 12).map(e => { const c = h("div", "wcell"), v = h("b"); c.append(h("span", "", nm(e)), v); g.append(c); return [e, v]; });
+    if (other.length) { const g = vGroup(pInf, "Messwerte");
+      const cells = other.slice(0, 12).map(e => { const r = h("div", "vrow"), v = h("span", "vv"); r.append(h("span", "vn", nm(e)), v); g.append(r); return [e, v]; });
       ups.push(() => cells.forEach(([e, v]) => { const x = stateOf(e), n = parseFloat(x.state); v.textContent = (isNaN(n) ? x.state : fmt(n)) + (x.attributes.unit_of_measurement ? " " + x.attributes.unit_of_measurement : ""); })); }
     if (buttons.length) actions(pInf, buttons);
-    const dt = h("button", "ghostbtn", "Technische Details"); dt.type = "button"; const pre = h("pre", "techpre"); pre.hidden = true;
+    const dg = vGroup(pInf), dt = h("button", "vrow vlink"), pre = h("pre", "techpre"); pre.hidden = true; dt.type = "button";
+    dt.append(h("span", "vn", "Technische Details"), h("span", "vv", "›"));
     dt.addEventListener("click", () => { pre.textContent = deviceDetails(id); pre.hidden = !pre.hidden; });
-    pInf.append(dt, pre);
+    dg.append(dt); pInf.append(pre);
     [["set", pSet], ["war", pWar], ["sta", pSta]].forEach(([k, p]) => { if (!p.children.length) tabBtn[k].hidden = true; });
     showTab(pSet.children.length ? "set" : pWar.children.length ? "war" : pSta.children.length ? "sta" : "inf");
 
     const upd = s => {
       const a = s.attributes, bat = a.battery_level, st = s.state;
-      stat.replaceChildren(); const dot = h("i", "vdot" + (st === "error" ? " err" : st === "cleaning" ? " run" : ""));
-      stat.append(dot, h("span", "", [VAC[st] || st, bat != null ? `Akku ${bat} %` : "", a.status && String(a.status).toLowerCase() !== String(st).toLowerCase() ? a.status : ""].filter(Boolean).join(" · ")));
-      go.textContent = st === "cleaning" ? (has(4) ? "Pause" : "Stopp") : st === "paused" ? "Fortsetzen" : "Starten";
+      const sub = $("sheetSub"), dot = h("i", "vdot" + (st === "error" ? " err" : st === "cleaning" ? " run" : ""));
+      sub.replaceChildren(dot, h("span", "", [VAC[st] || st, a.status && String(a.status).toLowerCase() !== String(st).toLowerCase() ? a.status : ""].filter(Boolean).join(" · ")));
+      if (bat != null) { const b = h("span", "vbat"), bi = h("i"); bi.style.setProperty("--lv", Math.max(0, Math.min(100, bat)) + "%"); b.append(bi, document.createTextNode(bat + " %")); sub.append(b); }
+      st === "cleaning" ? setBtn(go, has(4) ? "Pause" : "Stopp", has(4) ? "pause" : "stop") : setBtn(go, st === "paused" ? "Fortsetzen" : "Starten", "go");
       if (stop) stop.hidden = !["cleaning", "paused", "returning"].includes(st);
       const fr = findRooms(id); if (fr && fr.rooms.length) drawRooms(fr.rooms);
       ups.forEach(fn => fn());
     };
-    upd.rel = new Set(ids);
+    upd.rel = new Set(ids); upd.ownSub = true;
     return upd;
   },
 
@@ -688,19 +699,24 @@ function selectDetail(id, body, call) {
   return s => sg.set(s.state);
 }
 
+const clearSheetExtra = () => document.querySelectorAll(".sheet-card > .vhead").forEach(x => x.remove());
 function openSheet(id) {
   const s = states.get(id), d = DETAIL[domainOf(id)];
   if (!s || !d) return;
-  const body = $("sheetBody"); body.replaceChildren();
+  const body = $("sheetBody"); body.replaceChildren(); clearSheetExtra();
+  const domain = domainOf(id), tl = tiles.get(id), tic = tl && tl.el.querySelector(".ic");
   $("sheetTitle").textContent = nameOf(s);
-  const domain = domainOf(id);
+  $("sheetIco").innerHTML = tic ? `<svg class="ic" data-icon="${tic.dataset.icon || ""}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${tic.innerHTML}</svg>` : "";
+  $("sheetSub").replaceChildren();
   $("sheet").dataset.kind = domain;
   const upd = d(id, body, (service, data) => conn.call(domain, service, data, id));
-  sheetCtx = { id, update: upd, rel: upd.rel }; upd(s);
+  const subOf = st => { if (upd.ownSub) return; const t = tiles.get(id), x = t && t.el.querySelector(".state"); $("sheetSub").textContent = x ? x.textContent : ""; };
+  const upd2 = Object.assign(st => { upd(st); subOf(st); }, { rel: upd.rel, cleanup: upd.cleanup });
+  sheetCtx = { id, update: upd2, rel: upd.rel }; upd2(s);
   actions(body, [["Name und Symbol ändern", () => openEntityPanel(id)]]);
   $("sheet").hidden = false; $("sheetClose").focus();
 }
-function closeSheet() { sheetCtx?.update.cleanup?.(); $("sheet").hidden = true; sheetCtx = null; $("sheetBody").replaceChildren(); }
+function closeSheet() { sheetCtx?.update.cleanup?.(); $("sheet").hidden = true; sheetCtx = null; $("sheetBody").replaceChildren(); clearSheetExtra(); $("sheetIco").replaceChildren(); $("sheetSub").replaceChildren(); }
 $("sheetClose").addEventListener("click", closeSheet);
 $("sheetBg").addEventListener("click", closeSheet);
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("sheet").hidden) closeSheet(); });
@@ -1306,8 +1322,8 @@ function openRoomManager() {
 /* ---------- Fenster: Raum bearbeiten, Geräte wählen ---------- */
 function openPanel(title, build) {
   sheetCtx?.update.cleanup?.(); sheetCtx = null;
-  const body = $("sheetBody"); body.replaceChildren();
-  $("sheetTitle").textContent = title; $("sheet").dataset.kind = "panel";
+  const body = $("sheetBody"); body.replaceChildren(); clearSheetExtra();
+  $("sheetTitle").textContent = title; $("sheet").dataset.kind = "panel"; $("sheetIco").replaceChildren(); $("sheetSub").replaceChildren();
   build(body);
   $("sheet").hidden = false;
   (body.querySelector("input") || $("sheetClose")).focus();
