@@ -360,3 +360,8 @@ main{flex:1}
 .ec-edit{position:absolute;display:grid;place-items:center;background:rgba(20,18,32,.82);color:#fff;font-weight:700;box-shadow:0 0 0 1px rgba(255,255,255,.25)}
 
 .chip.active .ic[data-icon="fan"]{animation:hv-spin 1.6s linear infinite}
+
+.icon-groups{display:grid;gap:.5rem}
+.icon-group-title{font-size:1.05rem;color:var(--ink-2);font-weight:600;padding-top:.5rem}
+.tile.on:not(.noanim) .ic[data-icon="floorlamp"],.tile.on:not(.noanim) .ic[data-icon="pendant"],.tile.on:not(.noanim) .ic[data-icon="ceiling"],.tile.on:not(.noanim) .ic[data-icon="spot"],.tile.on:not(.noanim) .ic[data-icon="wall"],.tile.on:not(.noanim) .ic[data-icon="strip"],.tile.on:not(.noanim) .ic[data-icon="lights"],.tile.on:not(.noanim) .ic[data-icon="lantern"],.tile.on:not(.noanim) .ic[data-icon="chandelier"],.tile.on:not(.noanim) .ic[data-icon="flood"]{animation:hv-glow 2.8s ease-in-out infinite}
+.tile.on:not(.noanim) .ic[data-icon="candle"]{animation:hv-flicker 1.4s ease-in-out infinite}

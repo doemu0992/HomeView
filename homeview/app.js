@@ -45,6 +45,17 @@ const ICONS = {
   button: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>',
   shield: '<path d="M12 3 5 6v5c0 5 3 8.500 7 10 4-1.500 7-5 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/>',
   camera: '<path d="M3 7h3l1.500-2h9L18 7h3v12H3Z"/><circle cx="12" cy="13" r="3.500"/>',
+  floorlamp: '<path d="M8 3h8l2 6H6l2-6Z"/><path d="M12 9v12M8 21h8"/>',
+  pendant: '<path d="M12 2v5"/><path d="M4 17a8 8 0 0 1 16 0Z"/><path d="M10 20.500h4"/>',
+  ceiling: '<path d="M3 4h18M12 4v3"/><path d="M4 11h16a8 7 0 0 1-16 0Z"/><path d="M8 20l-1 2M12 20v2M16 20l1 2"/>',
+  spot: '<rect x="8" y="3" width="8" height="5" rx="1"/><path d="M7 11l-3 9M12 11v9M17 11l3 9"/>',
+  wall: '<path d="M3 4v16M3 12h5"/><path d="M8 12a6 6 0 0 1 12 0Z"/><path d="M14 15v2"/>',
+  strip: '<rect x="2" y="11" width="20" height="5" rx="2.500"/><path d="M6 8V6M12 8V5M18 8V6"/><circle cx="7" cy="13.500" r=".7"/><circle cx="12" cy="13.500" r=".7"/><circle cx="17" cy="13.500" r=".7"/>',
+  lights: '<path d="M2 5c4 6 8 6 10 0 2 6 6 6 10 0"/><circle cx="6" cy="12" r="1.700"/><circle cx="12" cy="13" r="1.700"/><circle cx="18" cy="12" r="1.700"/><path d="M6 9.300v1M12 10.300v1M18 9.300v1"/>',
+  candle: '<rect x="8" y="10" width="8" height="11" rx="1"/><path d="M12 10V8"/><path d="M12 2.500c2.200 2 2.200 4 0 5.500-2.200-1.500-2.200-3.500 0-5.500Z"/>',
+  lantern: '<path d="M9 3h6M12 3v2"/><path d="M7 7h10l1 11H6L7 7Z"/><path d="M5 18h14v3H5z"/><path d="M10 11v4M14 11v4"/>',
+  chandelier: '<path d="M12 2v4"/><path d="M12 6c-5 0-8 3-8 7M12 6c5 0 8 3 8 7M12 6v14"/><path d="M4 13v3M20 13v3M12 13v3"/>',
+  flood: '<rect x="4" y="5" width="10" height="9" rx="2"/><path d="M9 14v4M6 18h6M17 6l4-2M17 10h4M17 14l4 2"/>',
   lamp: '<path d="M8 3h8l3 9H5l3-9Z"/><path d="M12 12v8M9 20h6"/>',
   bed: '<path d="M3 18V8M3 14h18v4M21 14v-3a3 3 0 0 0-3-3h-7v6"/><circle cx="7" cy="11" r="1.5"/>',
   sofa: '<path d="M5 11V8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/><path d="M3 13a2 2 0 0 1 4 0v2h10v-2a2 2 0 0 1 4 0v5H3v-5Z"/><path d="M6 18v2M18 18v2"/>',
@@ -70,6 +81,16 @@ const ICONS = {
   list: '<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
 };
 const icon = k => `<svg class="ic" data-icon="${k}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k]}</svg>`;
+
+/* Symbol nach Name: „Stehlampe“ → Stehlampe, „Strip“ → LED-Streifen usw. (nur für Licht, Schalter) */
+const AUTO_ICONS = [[/steh/i, "floorlamp"], [/strip|led-?band|lichtband|streifen/i, "strip"], [/h[äa]nge|pendel/i, "pendant"], [/decke|plafon/i, "ceiling"],
+  [/spot|strahler/i, "spot"], [/wand(lampe|leuchte|licht)?\b/i, "wall"], [/kerze/i, "candle"], [/laterne|au(ß|ss)en(licht|leuchte)/i, "lantern"],
+  [/kronleuchter/i, "chandelier"], [/lichterkette|girlande/i, "lights"], [/flutlicht|fluter/i, "flood"], [/tisch|schreibtisch/i, "lamp"]];
+const autoIconKey = (name, domain) => {
+  if (!["light", "switch", "input_boolean"].includes(domain)) return null;
+  const m = AUTO_ICONS.find(([re]) => re.test(name));
+  return m ? m[1] : null;
+};
 
 /* ---------- Texte ---------- */
 const WEATHER = {
@@ -786,7 +807,7 @@ function applyIcon(id, t) {
   if (!svg) return;
   if (svg._def == null) { svg._def = svg.innerHTML; svg._defKey = svg.dataset.icon; }
   const st = states.get(id);
-  const k = o.icon && ICONS[o.icon] ? o.icon : (st && FAN_RE.test(nameOf(st)) && domainOf(id) !== "fan" ? "fan" : null);
+  const k = o.icon && ICONS[o.icon] ? o.icon : (st && FAN_RE.test(nameOf(st)) && domainOf(id) !== "fan" ? "fan" : (st && autoIconKey(nameOf(st), domainOf(id))));
   svg.innerHTML = k ? ICONS[k] : svg._def;
   svg.dataset.icon = k || svg._defKey;
   t.el.classList.toggle("noanim", o.anim === false);
@@ -951,15 +972,28 @@ function openEntityPanel(id) {
     const t0 = tiles.get(id);
     if (t0 && t0.el.querySelector(".ic")) {
       const iw = h("div", "ctl"), ir = h("div", "ctl-row"); ir.append(h("span", "", "Symbol")); iw.append(ir);
-      const grid = h("div", "icon-grid"), defKey = t0.el.querySelector(".ic")._defKey || t0.el.querySelector(".ic").dataset.icon;
-      const keys = [...new Set([defKey, ...Object.keys(ICONS)])];
-      const btns = keys.map(k => {
-        const b = h("button"); b.type = "button"; b.innerHTML = icon(k); b.setAttribute("aria-label", k === defKey ? "Standardsymbol" : k);
+      const origKey = t0.el.querySelector(".ic")._defKey || t0.el.querySelector(".ic").dataset.icon;
+      const defKey = (FAN_RE.test(nameOf(s)) && domainOf(id) !== "fan" ? "fan" : autoIconKey(nameOf(s), domainOf(id))) || origKey;
+      const GROUPS = [["Licht", ["light", "lamp", "floorlamp", "pendant", "ceiling", "spot", "wall", "strip", "lights", "candle", "lantern", "chandelier", "flood", "sun"]],
+        ["Schalter und Strom", ["switch", "power", "plug", "button", "sliders"]], ["Klima", ["fan", "heater", "snow", "flame", "thermo", "drop", "gauge"]],
+        ["Wohnen", ["sofa", "bed", "tv", "speaker", "media", "coffee", "washer", "fridge", "vacuum", "plant"]],
+        ["Sicherheit und Haus", ["lock", "door", "window", "garage", "cover", "shield", "camera", "motion", "bell", "home", "car"]], ["Sonstiges", ["scene", "wifi", "star", "heart", "list"]]];
+      const listed = new Set(GROUPS.flatMap(g => g[1])); const rest = Object.keys(ICONS).filter(k => !listed.has(k));
+      if (rest.length) GROUPS.push(["Weitere", rest]);
+      const btns = [];
+      const mkBtn = (k, std) => {
+        const b = h("button"); b.type = "button"; b.innerHTML = icon(k); b.setAttribute("aria-label", std ? "Automatisches Symbol (nach Name)" : k);
         b.addEventListener("click", () => { const o = get(); k === defKey ? delete o.icon : (o.icon = k); refresh(); mark(); });
-        grid.append(b); return [k, b];
+        btns.push([k, b]); return b;
+      };
+      const grid = h("div", "icon-grid"); grid.append(mkBtn(defKey, true));
+      const gw = h("div", "icon-groups"); gw.append(grid);
+      GROUPS.forEach(([title, keys]) => {
+        const g = h("div", "icon-grid"); keys.filter(k => ICONS[k]).forEach(k => g.append(mkBtn(k, false)));
+        gw.append(h("div", "icon-group-title", title), g);
       });
       const mark = () => { const cur = (c.ent[id] && c.ent[id].icon) || defKey; btns.forEach(([k, b]) => b.setAttribute("aria-pressed", String(k === cur))); };
-      mark(); iw.append(grid); body.append(iw);
+      mark(); iw.append(gw); body.append(iw);
       const an = seg(body, { label: "Animation", options: [[true, "An"], [false, "Aus"]], on: v => { const o = get(); v ? delete o.anim : (o.anim = false); refresh(); an.set(v); } });
       an.set(!(c.ent[id] && c.ent[id].anim === false));
       body.append(h("div", "info", "Animierte Symbole bewegen sich, solange das Gerät an ist (zum Beispiel dreht sich der Ventilator)."));

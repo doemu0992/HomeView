@@ -70,6 +70,10 @@ Oben rechts zeigt HomeView das Wetter mit animiertem Symbol (Sonne, Wolken, Rege
 
 Anordnen → „Räume“: alle Räume an einer Stelle. Neue Räume anlegen, jeden Raum ein- oder ausblenden (auch leere Räume aus Home Assistant), umbenennen, per Pfeil sortieren, eigene Räume löschen. Die Geräte pro Raum wählst du mit „Geräte“.
 
+## Symbole nach Gruppen
+
+Die Symbolauswahl ist nach Gruppen sortiert (Licht, Schalter und Strom, Klima, Wohnen, Sicherheit und Haus, Sonstiges). Bei Licht gibt es viele Lampenformen: Glühbirne, Tischlampe, Stehlampe, Hängelampe, Deckenleuchte, Spot, Wandlampe, LED-Streifen, Lichterkette, Kerze, Laterne, Kronleuchter, Flutlicht. Das automatische Symbol richtet sich nach dem Namen („Stehlampe“ → Stehlampe, „Strip“ → LED-Streifen, „Decke“ → Deckenleuchte …).
+
 ## Name, Symbol, Animation
 
 Im Anordnen-Modus auf das Stift-Symbol einer Kachel tippen (oder im Detailfenster „Name und Symbol ändern“): Gerät umbenennen, aus rund 40 Symbolen wählen, Animation ein- oder ausschalten. Animierte Symbole bewegen sich, solange das Gerät an ist (Ventilator dreht sich, Lampe leuchtet, Flamme flackert, Glocke schwingt …).
