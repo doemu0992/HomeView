@@ -46,6 +46,8 @@ Liegt `homeview.html` unter `/config/www/` und wird per iframe-Karte (`/local/ho
 
 ## Chips (standardmäßig an)
 
+Der Name entscheidet: Geräte mit „Lüfter“ oder „Ventilator“ im Namen zählen als Lüfter (eigener Chip „Lüfter an/aus“ mit drehendem Symbol), nicht als Licht, auch wenn Home Assistant sie als Licht führt.
+
 Jeder Raum zeigt oben eine Chip-Leiste (Temperatur, Luftfeuchte, Lichter, offene Fenster/Türen, Schlösser, Medien, Alarm, Energie). Ausschalten unter „Anordnen → Chips“ oder mit `#chips=0` an der Adresse.
 
 ## Bildschirmgröße

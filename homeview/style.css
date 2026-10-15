@@ -358,3 +358,5 @@ main{flex:1}
 .rm-del{background:rgba(255,69,58,.35);font-size:1rem}
 .sheet[data-kind=panel] .rm-row .textin{background:rgba(0,0,0,.28)}
 .ec-edit{position:absolute;display:grid;place-items:center;background:rgba(20,18,32,.82);color:#fff;font-weight:700;box-shadow:0 0 0 1px rgba(255,255,255,.25)}
+
+.chip.active .ic[data-icon="fan"]{animation:hv-spin 1.6s linear infinite}

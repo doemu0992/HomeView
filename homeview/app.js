@@ -120,6 +120,9 @@ const tiles = new Map();            // entity_id -> { el, update(state) }
 let sheetCtx = null;                // { id, update(state) }
 
 const domainOf = id => id.split(".")[0];
+/* Der Name entscheidet: „Lüfter“/„Ventilator“ im Namen = Lüfter, auch wenn Home Assistant das Gerät als Licht führt */
+const FAN_RE = /l[uü]e?fter|ventilator/i;
+const isFanLike = s => domainOf(s.entity_id) === "fan" || FAN_RE.test(nameOf(s));
 const nameOf = s => {
   const o = layout.__cfg && layout.__cfg.ent && layout.__cfg.ent[s.entity_id];
   return (o && o.name) || s.attributes.friendly_name || s.entity_id;
@@ -782,7 +785,8 @@ function applyIcon(id, t) {
   const svg = t.el.querySelector(".ic");
   if (!svg) return;
   if (svg._def == null) { svg._def = svg.innerHTML; svg._defKey = svg.dataset.icon; }
-  const k = o.icon && ICONS[o.icon] ? o.icon : null;
+  const st = states.get(id);
+  const k = o.icon && ICONS[o.icon] ? o.icon : (st && FAN_RE.test(nameOf(st)) && domainOf(id) !== "fan" ? "fan" : null);
   svg.innerHTML = k ? ICONS[k] : svg._def;
   svg.dataset.icon = k || svg._defKey;
   t.el.classList.toggle("noanim", o.anim === false);
@@ -1239,10 +1243,15 @@ function renderChips() {
   const heating = dom("climate").filter(s => s.attributes.hvac_action === "heating");
   if (heating.length) add("heat", "flame", "Heizt", { cls: "active" });
 
-  const lights = dom("light"), lOn = lights.filter(s => s.state === "on");
+  const lights = dom("light").filter(s => !FAN_RE.test(nameOf(s))), lOn = lights.filter(s => s.state === "on");
   if (lights.length) add("lights", "light", lOn.length ? `${lOn.length} ${lOn.length === 1 ? "Licht" : "Lichter"} an` : "Lichter aus", {
     cls: lOn.length ? "active" : "",
     on: () => lights.forEach(s => conn.call("light", lOn.length ? "turn_off" : "turn_on", {}, s.entity_id)) });
+
+  const fans = pool.filter(s => ["fan", "light", "switch", "input_boolean"].includes(domainOf(s.entity_id)) && s.state !== "unavailable" && isFanLike(s)), fOn = fans.filter(s => s.state === "on");
+  if (fans.length) add("fans", "fan", fOn.length ? `${fOn.length} Lüfter an` : "Lüfter aus", {
+    cls: fOn.length ? "active" : "",
+    on: () => fans.forEach(s => conn.call(domainOf(s.entity_id), fOn.length ? "turn_off" : "turn_on", {}, s.entity_id)) });
 
   const openers = dom("binary_sensor").filter(s => ["door", "window", "opening", "garage_door"].includes(s.attributes.device_class) && s.state === "on");
   if (openers.length) add("open", "door", openers.length === 1 ? `${nameOf(openers[0])} offen` : `${openers.length} offen`, { cls: "warn" });
@@ -1458,6 +1467,7 @@ function startDemo() {
       color_temp_kelvin: 2700, min_color_temp_kelvin: 2000, max_color_temp_kelvin: 6500, effect_list: ["Kerze", "Regenbogen", "Puls"], effect: null }),
     S("light.decke", "on", { friendly_name: "Deckenlicht", brightness: 255, supported_color_modes: ["color_temp"], color_mode: "color_temp", color_temp_kelvin: 3200, min_color_temp_kelvin: 2200, max_color_temp_kelvin: 6000 }),
     S("light.kueche", "off", { friendly_name: "Küchenlicht", supported_color_modes: ["brightness"] }),
+    S("light.luefter_bad", "on", { friendly_name: "Lüfter Bad", brightness: 128, supported_color_modes: ["brightness"] }),
     S("light.bett", "off", { friendly_name: "Nachttisch", supported_color_modes: ["onoff"] }),
     S("lock.haustuer", "unlocked", { friendly_name: "Haustür", supported_features: 1 }),
     S("fan.ventilator", "off", { friendly_name: "Ventilator", supported_features: 15, percentage: 40, percentage_step: 20, oscillating: false, direction: "forward", preset_modes: ["Natur", "Schlaf"], preset_mode: null }),
@@ -1485,7 +1495,7 @@ function startDemo() {
   list.forEach(s => states.set(s.entity_id, s));
   areas = [{ area_id: "wz", name: "Wohnzimmer" }, { area_id: "ku", name: "Küche" }, { area_id: "sz", name: "Schlafzimmer" }, { area_id: "au", name: "Außen" }, { area_id: "bu", name: "Büro" }];
   Object.entries({ "climate.wohnzimmer": "wz", "light.stehlampe": "wz", "light.decke": "wz", "fan.ventilator": "wz", "sensor.feuchte_wz": "wz", "binary_sensor.fenster_wz": "wz",
-    "media_player.kueche": "ku", "sensor.temp_kueche": "ku", "sensor.temp_schlaf": "sz", "sensor.feuchte_schlaf": "sz", "light.kueche": "ku", "switch.kaffee": "ku", "light.bett": "sz", "humidifier.schlafzimmer": "sz",
+    "media_player.kueche": "ku", "sensor.temp_kueche": "ku", "sensor.temp_schlaf": "sz", "sensor.feuchte_schlaf": "sz", "light.kueche": "ku", "switch.kaffee": "ku", "light.bett": "sz", "light.luefter_bad": "sz", "humidifier.schlafzimmer": "sz",
     "lock.haustuer": "au", "camera.eingang": "au", "camera.garten": "au", "alarm_control_panel.haus": "au", "cover.rollo": "au", "sensor.temp_aussen": "au" }).forEach(([k, v]) => entityArea.set(k, v));
 
   const set = (id, state, extra = {}) => { const o = states.get(id); pushState({ ...o, state, attributes: { ...o.attributes, ...extra } }); };
