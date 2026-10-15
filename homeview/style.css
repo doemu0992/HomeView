@@ -368,3 +368,53 @@ main{flex:1}
 
 .ghostbtn{border:0;border-radius:99px;padding:.6rem 1.2rem;font-size:1.05rem;font-weight:600;background:rgba(255,255,255,.1);color:var(--ink-2);cursor:pointer;justify-self:start}
 .techpre{margin:0;padding:.8rem 1rem;border-radius:1rem;background:rgba(0,0,0,.35);color:#cfe;font:.95rem/1.4 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-word;user-select:text}
+
+/* Saugroboter-Fenster */
+.sheet[data-kind=vacuum] .sheet-card{width:min(46rem,100%)}
+.vhead{position:sticky;top:0;z-index:2;display:grid;gap:.8rem;padding-bottom:.9rem;margin-bottom:-.3rem;background:#29253d}
+.vstat{display:flex;align-items:center;gap:.6rem;font-size:1.25rem;color:var(--ink-2)}
+.vdot{width:.8rem;height:.8rem;border-radius:50%;background:#5be08a;flex:none}
+.vdot.run{animation:vac-pulse 1.4s ease-in-out infinite}.vdot.err{background:#ff6b5e}
+@keyframes vac-pulse{50%{opacity:.35}}
+.vmain{display:flex;gap:.6rem}
+.vbig{flex:1 1 0;border:0;border-radius:1.3rem;padding:.9rem .6rem;min-height:3.6rem;font-size:1.2rem;font-weight:600;background:rgba(255,255,255,.14);cursor:pointer;color:#fff}
+.vbig.vgo{flex:2 1 0;background:#8f7cff;color:#120c2a}
+.vbig[hidden]{display:none}
+.vhint{font-size:.95rem;font-weight:400;color:var(--ink-2)}
+.vchips{display:flex;gap:.6rem;overflow-x:auto;padding-bottom:.3rem;scrollbar-width:none}
+.vchips::-webkit-scrollbar{display:none}
+.vsc{flex:none;min-width:8.5rem;display:grid;gap:.15rem;text-align:left;border:1px solid rgba(255,255,255,.14);border-radius:1.2rem;padding:.7rem 1rem;background:rgba(255,255,255,.08);color:#fff;cursor:pointer;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.vsc b{font-size:1.1rem}.vsc span{font-size:.9rem;color:var(--ink-2)}
+.vsc.vadd{border-style:dashed;place-content:center;color:var(--ink-2);font-size:1.1rem}
+.vedit{display:grid;gap:.6rem;padding:.8rem;border-radius:1.2rem;background:rgba(0,0,0,.22)}
+.vedit .actions button{font-size:1rem;padding:.55rem 1rem}
+.seg.eq{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:.3rem;padding:.3rem;border-radius:1.2rem;background:rgba(255,255,255,.08)}
+.seg.eq button{border-radius:.95rem;padding:.7rem .4rem;font-size:1.05rem;background:none}
+.seg.eq button[aria-pressed="true"]{background:#fff}
+.vtwo{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.vrooms{display:grid;grid-template-columns:repeat(auto-fill,minmax(8.5rem,1fr));gap:.5rem}
+.vroom{border:1px solid rgba(255,255,255,.14);border-radius:1.1rem;padding:.8rem;text-align:left;font-size:1.1rem;font-weight:600;background:rgba(255,255,255,.08);color:#fff;cursor:pointer}
+.vroom[aria-pressed="true"]{background:rgba(143,124,255,.35);border-color:#b9acff}
+.vtabs{display:flex;gap:.4rem;border-top:1px solid rgba(255,255,255,.12);padding-top:.9rem}
+.vtabs button{flex:1;border:0;background:none;color:var(--ink-2);padding:.7rem .4rem;border-radius:1rem;font-size:1.1rem;cursor:pointer}
+.vtabs button[hidden]{display:none}
+.vtabs button[aria-pressed="true"]{background:rgba(255,255,255,.16);color:#fff;font-weight:600}
+.vpane{display:grid;gap:.9rem;align-content:start}
+.vpane[hidden]{display:none}
+.vgrp{border-radius:1.2rem;background:rgba(255,255,255,.08);overflow:hidden}
+.vgrp h4{margin:0;padding:.7rem 1rem .2rem;font-size:.85rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);font-weight:500}
+.vgrp .ctl{padding:.5rem 1rem .8rem}
+.vrow{display:flex;align-items:center;gap:.8rem;padding:.75rem 1rem;border-top:1px solid rgba(255,255,255,.1);font-size:1.15rem}
+.vgrp h4+.vrow{border-top:0}
+.vn{flex:1;min-width:0}
+.vv{color:var(--ink-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.vtg{width:3.4rem;height:2rem;border-radius:1rem;border:0;background:rgba(255,255,255,.22);position:relative;flex:none;cursor:pointer;padding:0;transition:background .2s}
+.vtg:after{content:"";position:absolute;top:.2rem;left:.2rem;width:1.6rem;height:1.6rem;border-radius:50%;background:#fff;transition:left .2s}
+.vtg[aria-checked="true"]{background:#34c759}.vtg[aria-checked="true"]:after{left:1.6rem}
+.vstep{display:flex;align-items:center;gap:.6rem}
+.vstep button{width:2.6rem;height:2.6rem;border-radius:50%;border:0;background:rgba(255,255,255,.16);color:#fff;font-size:1.4rem;line-height:1;cursor:pointer}
+.vstep .vv{min-width:4.2rem;text-align:center;color:#fff}
+.vlife{width:6rem;height:.5rem;border-radius:.3rem;background:rgba(255,255,255,.15);overflow:hidden;flex:none}
+.vlife[hidden]{display:none}
+.vlife i{display:block;height:100%;background:#34c759}.vlife.low i{background:#ffb54d}
+@media(max-width:560px){.vtwo{grid-template-columns:1fr}}

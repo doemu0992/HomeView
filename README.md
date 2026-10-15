@@ -91,3 +91,7 @@ Im Anordnen-Modus: „+ Raum“ legt einen Raum an, „Raum bearbeiten“ benenn
 Unten rechts auf „Anordnen“ tippen (oder lange auf freie Fläche / die Uhr drücken): Die Kacheln wackeln, lassen sich per Ziehen umsortieren, über das Größen-Symbol (1×1, 2×1, 2×2, 1×2) vergrößern und verkleinern und über „−“ ausblenden. Das Layout wird pro Raum im Browser des Displays gespeichert; „Zurücksetzen“ stellt den Standard wieder her.
 
 Unterstützt: Alarmanlagen (Code-Tastatur, Zuhause/Abwesend/Nacht/Urlaub), Kameras (Vorschau, Live-Bild per MJPEG, Ein/Aus), Szenen, Licht (inkl. RGB/Farbtemperatur/Effekte), Heizung, Schalter, Ventilator, Luftbefeuchter, Rollos, Schlösser, Mediaplayer, Staubsauger, Buttons, Zahlen- und Auswahlfelder (number/select, input_*), Sensoren und Binärsensoren. Geräte ohne Raum stehen unter „Weitere“.
+
+## Saugroboter
+
+Das Fenster eines Saugroboters zeigt oben Status, Akku und die Knöpfe Starten/Pause, Station und Finden. Darunter liegen Kurzbefehle (Räume, Modus, Saugkraft und Wassermenge in einem Tipp, lange drücken zum Bearbeiten), die Auswahl für Reinigungsmodus, Saugkraft und Wassermenge sowie die Räume als Kacheln. Alle weiteren Einstellungen des Geräts liegen in den Reitern Einstellungen, Wartung, Station und Info. Kurzbefehle werden mit dem Layout in Home Assistant gespeichert.

@@ -334,6 +334,26 @@ function deviceDetails(id) {
     ...rel.map(e => "  " + e + (entityPlatform.get(e) ? "  [" + entityPlatform.get(e) + "]" : "") + (extras.has(e) ? "  (Konfiguration/Diagnose)" : ""))].join("\n");
 }
 
+/* ---------- Saugroboter: Schalter, Plus/Minus, Gruppen ---------- */
+const VAC_L = { sweeping: "Saugen", mopping: "Wischen", sweeping_and_mopping: "Beides", mopping_after_sweeping: "Erst saugen, dann wischen", quiet: "Leise", silent: "Leise", standard: "Standard", strong: "Stark", turbo: "Turbo", max: "Max", low: "Wenig", medium: "Mittel", high: "Viel" };
+function vGroup(parent, title) { const g = h("div", "vgrp"); if (title) g.append(h("h4", "", title)); parent.append(g); return g; }
+function vSwitch(parent, text, on) {
+  const r = h("div", "vrow"), b = h("button", "vtg"); let cur = false;
+  b.type = "button"; b.setAttribute("role", "switch"); b.setAttribute("aria-label", text); b.setAttribute("aria-checked", "false");
+  b.addEventListener("click", () => { cur = !cur; b.setAttribute("aria-checked", String(cur)); on(cur); });
+  r.append(h("span", "vn", text), b); parent.append(r);
+  return { set(v) { cur = !!v; b.setAttribute("aria-checked", String(cur)); } };
+}
+function vStep(parent, text, { min, max, step, unit, on }) {
+  const r = h("div", "vrow"), box = h("span", "vstep"), m = h("button", "", "\u2212"), v = h("span", "vv", "\u2013"), p = h("button", "", "+");
+  let cur = null, touched = 0, t;
+  m.type = p.type = "button"; m.setAttribute("aria-label", text + " weniger"); p.setAttribute("aria-label", text + " mehr");
+  const bump = d => { if (cur == null) return; cur = Math.min(max, Math.max(min, Math.round((cur + d * step) * 1000) / 1000)); touched = Date.now(); v.textContent = fmt(cur) + unit; clearTimeout(t); t = setTimeout(() => on(cur), 400); };
+  m.addEventListener("click", () => bump(-1)); p.addEventListener("click", () => bump(1));
+  box.append(m, v, p); r.append(h("span", "vn", text), box); parent.append(r);
+  return { set(x) { if (x == null || isNaN(x) || Date.now() - touched < 1500) return; cur = x; v.textContent = fmt(cur) + unit; } };
+}
+
 /* ---------- Detailfenster pro Gerätetyp ---------- */
 const DETAIL = {
   light(id, body, call) {
@@ -457,45 +477,145 @@ const DETAIL = {
   },
 
   vacuum(id, body, call) {
-    const a0 = states.get(id).attributes, f = a0.supported_features, has = bit => f == null || (f & bit) !== 0;
-    const status = h("div", "info big"), sub = h("div", "info"); sub.style.textAlign = "center"; body.append(status, sub);
-    const tr = [];
-    if (has(8192) || has(1)) tr.push(["Start", () => call("start", {})]);
-    if (has(4)) tr.push(["Pause", () => call("pause", {})]);
-    if (has(8)) tr.push(["Stopp", () => call("stop", {})]);
-    if (has(16)) tr.push(["Zur Station", () => call("return_to_base", {})]);
-    if (has(512)) tr.push(["Suchen", () => call("locate", {})]);
-    actions(body, tr);
-    const sp = (a0.fan_speed_list || []).length ? seg(body, { label: "Saugstärke", options: a0.fan_speed_list.map(m => [m, label({}, m)]), on: v => call("set_fan_speed", { fan_speed: v }) }) : null;
-    // Räume: Mehrfachauswahl und gezielt reinigen (Raumliste wird in Attributen und verwandten Entitäten gesucht)
-    const sel = new Set(); let roomBox = null, roomKey = "";
-    const msg = h("div", "info err"), none = h("div", "info");
-    const drawRooms = rooms => {
-      const key = JSON.stringify(rooms); if (key === roomKey) return; roomKey = key; none.hidden = true;
-      if (!roomBox) { const w = h("div", "ctl"), r = h("div", "ctl-row"); r.append(h("span", "", "Räume")); w.append(r); roomBox = h("div", "seg"); w.append(roomBox); body.append(w);
-        actions(body, [["Gewählte Räume reinigen", async () => { if (!sel.size) { msg.textContent = "Wähle zuerst mindestens einen Raum."; return; }
-          const ok = await cleanRooms(id, [...sel]);
-          msg.textContent = ok ? "" : "Raumreinigung wird von dieser Integration nicht unterstützt."; }]]); body.append(msg); }
-      roomBox.replaceChildren(...rooms.map(r => { const b = h("button", "", r.name); b.type = "button"; b.setAttribute("aria-pressed", String(sel.has(r.id)));
-        b.addEventListener("click", () => { sel.has(r.id) ? sel.delete(r.id) : sel.add(r.id); b.setAttribute("aria-pressed", String(sel.has(r.id))); msg.textContent = ""; }); return b; }));
+    const main = states.get(id), a0 = main.attributes, f = a0.supported_features, has = bit => f == null || (f & bit) !== 0;
+    const ids = relatedIds(id), ups = [], sel = new Set();
+    const esc = t => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const strip = n => { const x = n.replace(new RegExp("^" + esc(nameOf(main)) + "\\s*", "i"), "").trim(); return x ? x.charAt(0).toUpperCase() + x.slice(1) : n; };
+    const nm = e => strip(stateOf(e).attributes.friendly_name || e), txt = e => (nm(e) + " " + e).toLowerCase();
+    const isSel = e => ["select", "input_select"].includes(domainOf(e)) && (stateOf(e).attributes.options || []).length;
+    const selects = ids.filter(isSel);
+    const waterE = selects.find(e => /wasser|water|feucht|humid/.test(txt(e)));
+    const suckE = selects.find(e => e !== waterE && /saug|suction/.test(txt(e)));
+    const modeE = selects.find(e => e !== waterE && e !== suckE && /modus|mode|reinigungs|clean/.test(txt(e)));
+    const selCall = (e, v) => conn.call(domainOf(e), "select_option", { option: v }, e);
+    const selSeg = (parent, e, title) => { const sg = seg(parent, { label: title || nm(e), options: stateOf(e).attributes.options.map(o => [o, label(VAC_L, o)]), on: v => selCall(e, v) });
+      ups.push(() => sg.set(stateOf(e).state)); return sg; };
+
+    /* Kopf: Status und Hauptknöpfe bleiben beim Scrollen stehen */
+    const head = h("div", "vhead"), stat = h("div", "vstat"), bar = h("div", "vmain");
+    head.append(stat, bar); body.append(head);
+    const vbtn = (txt, fn, cls) => { const b = h("button", "vbig" + (cls ? " " + cls : ""), txt); b.type = "button"; b.addEventListener("click", fn); bar.append(b); return b; };
+    const go = vbtn("Starten", () => { const st = states.get(id).state; if (st === "cleaning") call(has(4) ? "pause" : "stop", {}); else call("start", {}); }, "vgo");
+    const home = has(16) ? vbtn("Station", () => call("return_to_base", {})) : null;
+    const find = has(512) ? vbtn("Finden", () => call("locate", {})) : null;
+    const stop = has(8) ? vbtn("Stopp", () => call("stop", {})) : null;
+
+    /* Kurzbefehle */
+    const cfg = cfgOf(); cfg.vac = cfg.vac || {};
+    const list = () => cfg.vac[id] = cfg.vac[id] || [];
+    let rooms = [];
+    const roomName = r => (rooms.find(x => x.id === r) || {}).name || "?";
+    const curSetting = () => ({ rooms: [...sel], mode: modeE ? stateOf(modeE).state : null, suck: suckE ? stateOf(suckE).state : states.get(id).attributes.fan_speed, water: waterE ? stateOf(waterE).state : null });
+    const msg = h("div", "info err");
+    const cleanSel = async segs => { const ok = await cleanRooms(id, segs); msg.textContent = ok ? "" : "Raumreinigung wird von dieser Integration nicht unterstützt."; };
+    const runSc = async sc => {
+      if (sc.mode && modeE) await selCall(modeE, sc.mode);
+      if (sc.suck) { if (suckE) await selCall(suckE, sc.suck); else await call("set_fan_speed", { fan_speed: sc.suck }); }
+      if (sc.water && waterE) await selCall(waterE, sc.water);
+      if (sc.rooms && sc.rooms.length) await cleanSel(sc.rooms); else await call("start", {});
     };
-    const rel = relatedControls(body, id);
+    const scSec = h("div", "ctl"), scHead = h("div", "ctl-row"), scBox = h("div", "vchips"), scEdit = h("div", "vedit"); scEdit.hidden = true;
+    scHead.append(h("span", "", "Kurzbefehle"), h("span", "vhint", "lange drücken = bearbeiten")); scSec.append(scHead, scBox, scEdit); body.append(scSec);
+    const closeEdit = () => { scEdit.hidden = true; scEdit.replaceChildren(); };
+    const openEdit = idx => {
+      const sc = idx == null ? null : list()[idx], inp = h("input", "textin"); inp.placeholder = "Name, zum Beispiel Küche jetzt"; inp.value = sc ? sc.name : ""; inp.setAttribute("aria-label", "Name des Kurzbefehls");
+      const acts = [["Speichern", () => { const name = inp.value.trim(); if (!name) { inp.focus(); return; }
+        if (sc) sc.name = name; else list().push({ name, ...curSetting() }); saveLayout(); closeEdit(); drawSc(); }]];
+      if (sc) acts.push(["Auswahl übernehmen", () => { Object.assign(sc, curSetting()); saveLayout(); closeEdit(); drawSc(); }], ["Löschen", () => { list().splice(idx, 1); saveLayout(); closeEdit(); drawSc(); }]);
+      acts.push(["Abbrechen", closeEdit]);
+      scEdit.replaceChildren(inp, h("div", "vhint", sc ? "Der Kurzbefehl merkt sich Räume, Modus, Saugkraft und Wassermenge." : "Gespeichert wird die aktuelle Auswahl unten: Räume, Modus, Saugkraft und Wassermenge."));
+      actions(scEdit, acts); scEdit.hidden = false; inp.focus();
+    };
+    function drawSc() {
+      scBox.replaceChildren(...list().map((sc, i) => {
+        const b = h("button", "vsc"), sub = [sc.rooms && sc.rooms.length ? sc.rooms.map(roomName).join(", ") : "Alles", sc.mode ? label(VAC_L, sc.mode) : ""].filter(Boolean).join(" · ");
+        b.type = "button"; b.append(h("b", "", sc.name), h("span", "", sub));
+        let t = 0, long = false;
+        b.addEventListener("pointerdown", () => { long = false; t = setTimeout(() => { long = true; openEdit(i); }, 600); });
+        ["pointerup", "pointerleave", "pointercancel"].forEach(ev => b.addEventListener(ev, () => clearTimeout(t)));
+        b.addEventListener("click", () => { if (!long) runSc(sc); });
+        return b;
+      }), (() => { const b = h("button", "vsc vadd", "+ Neu"); b.type = "button"; b.addEventListener("click", () => openEdit(null)); return b; })());
+    }
+    drawSc();
+
+    /* Modus, Saugkraft, Wassermenge */
+    const eq = sg => { sg.w.querySelector(".seg").classList.add("eq"); return sg; };
+    if (modeE) eq(selSeg(body, modeE, "Reinigungsmodus"));
+    const two = h("div", "vtwo"); body.append(two);
+    if (suckE) eq(selSeg(two, suckE, "Saugkraft"));
+    else if ((a0.fan_speed_list || []).length) { const sp = eq(seg(two, { label: "Saugkraft", options: a0.fan_speed_list.map(m => [m, label(VAC_L, m)]), on: v => call("set_fan_speed", { fan_speed: v }) })); ups.push(() => sp.set(states.get(id).attributes.fan_speed)); }
+    if (waterE) eq(selSeg(two, waterE, "Wassermenge"));
+    if (!two.children.length) two.remove();
+
+    /* Räume als Kacheln */
+    const none = h("div", "info"); let roomSec = null, roomBox = null, roomKey = "", cnt = null, goRooms = null;
+    const drawRooms = rs => {
+      const key = JSON.stringify(rs); if (key === roomKey) return; roomKey = key; rooms = rs; none.hidden = true;
+      if (!roomSec) {
+        roomSec = h("div", "ctl"); const r = h("div", "ctl-row"); cnt = h("span", "vhint", "alle"); r.append(h("span", "", "Räume"), cnt);
+        roomBox = h("div", "vrooms"); roomSec.append(r, roomBox); body.insertBefore(roomSec, none);
+        goRooms = h("button", "vbig vgo", "Gewählte Räume reinigen"); goRooms.type = "button"; goRooms.hidden = true; goRooms.addEventListener("click", () => cleanSel([...sel]));
+        body.insertBefore(goRooms, none); body.insertBefore(msg, none);
+      }
+      roomBox.replaceChildren(...rs.map(r => { const b = h("button", "vroom", r.name); b.type = "button"; b.setAttribute("aria-pressed", String(sel.has(r.id)));
+        b.addEventListener("click", () => { sel.has(r.id) ? sel.delete(r.id) : sel.add(r.id); b.setAttribute("aria-pressed", String(sel.has(r.id))); msg.textContent = "";
+          cnt.textContent = sel.size ? sel.size + " gewählt" : "alle"; goRooms.hidden = !sel.size; }); return b; }));
+      drawSc();
+    };
     none.textContent = entityPlatform.get(id) === "matter"
-      ? "Über Matter bietet Home Assistant für diesen Roboter keine Raumauswahl an. Reinigungsmodus und Status stehen oben und unten. Für Räume braucht es eine Integration, die sie liefert (zum Beispiel „Dreame Vacuum“ aus HACS)."
+      ? "Über Matter bietet Home Assistant für diesen Roboter keine Raumauswahl an. Für Räume braucht es eine Integration, die sie liefert (zum Beispiel „Dreame Vacuum“ aus HACS)."
       : "Dein Roboter meldet Home Assistant keine Raumliste. Für die Raumauswahl braucht es eine Integration, die Räume liefert (zum Beispiel Dreame über HACS). Unter „Technische Details“ siehst du, was dein Roboter meldet.";
     body.append(none);
+
+    /* Reiter: Einstellungen, Wartung, Station, Info */
+    const STATION = /station|dock|selbstreinig|self.?clean|entleer|empty|trock|dry|wasch|wash|feucht|humid/, CONS = /bürste|brush|filter|tuch|mop|wartung|sensor|verbrauch|remaining|left|lebens|life|verbleib|reinig/;
+    const tabs = h("div", "vtabs"), panes = {}, tabBtn = {};
+    const mkPane = (key, title) => { const p = h("div", "vpane"); p.hidden = true; panes[key] = p;
+      const b = h("button", "", title); b.type = "button"; b.addEventListener("click", () => showTab(key)); tabBtn[key] = b; tabs.append(b); return p; };
+    const showTab = k => Object.keys(panes).forEach(x => { panes[x].hidden = x !== k; tabBtn[x].setAttribute("aria-pressed", String(x === k)); });
+    const pSet = mkPane("set", "Einstellungen"), pWar = mkPane("war", "Wartung"), pSta = mkPane("sta", "Station"), pInf = mkPane("inf", "Info");
+    body.append(tabs, pSet, pWar, pSta, pInf);
+    const grp = {}, gOf = (pane, key, title) => grp[key] || (grp[key] = vGroup(pane, title));
+    const wear = [], other = [], buttons = [];
+    ids.forEach(e => {
+      if (e === waterE || e === suckE || e === modeE) return;
+      const s = stateOf(e), d = domainOf(e), a = s.attributes, pane = STATION.test(txt(e)) ? pSta : pSet, stn = pane === pSta;
+      if (isSel(e)) selSeg(gOf(pane, "s" + stn, stn ? "Station" : "Auswahl"), e);
+      else if (d === "number" || d === "input_number") {
+        const u = a.unit_of_measurement ? " " + a.unit_of_measurement : "", mn = a.min ?? 0, mx = a.max ?? 100, raw = a.step || 1;
+        const w = vStep(gOf(pane, "n" + stn, stn ? "Station" : "Werte"), nm(e), { min: mn, max: mx, step: mx - mn >= 50 ? Math.max(raw, 5) : raw, unit: u, on: v => conn.call(d, "set_value", { value: v }, e) });
+        ups.push(() => w.set(parseFloat(stateOf(e).state)));
+      } else if (d === "switch" || d === "input_boolean") {
+        const w = vSwitch(gOf(pane, "t" + stn, stn ? "Station" : "Schnell umschalten"), nm(e), v => conn.call(d, v ? "turn_on" : "turn_off", {}, e));
+        ups.push(() => w.set(stateOf(e).state === "on"));
+      } else if (d === "button" || d === "input_button") buttons.push([nm(e), () => conn.call(d, "press", {}, e)]);
+      else if (d === "sensor" && s.state !== "unavailable") (CONS.test(txt(e)) && a.unit_of_measurement && !STATION.test(txt(e)) ? wear : other).push(e);
+    });
+    if (wear.length) { const g = vGroup(pWar, "Verschleißteile"); wear.forEach(e => {
+      const r = h("div", "vrow"), life = h("span", "vlife"), bar2 = h("i"), v = h("span", "vv"); life.append(bar2); r.append(h("span", "vn", nm(e)), life, v); g.append(r);
+      ups.push(() => { const x = stateOf(e), n = parseFloat(x.state), u = x.attributes.unit_of_measurement; v.textContent = (isNaN(n) ? x.state : fmt(n)) + " " + u;
+        const pct = u === "%" && !isNaN(n); life.hidden = !pct; if (pct) { bar2.style.width = Math.max(0, Math.min(100, n)) + "%"; life.classList.toggle("low", n < 20); } }); }); }
+    if (other.length) { const g = h("div", "wgrid"); pInf.append(g);
+      const cells = other.slice(0, 12).map(e => { const c = h("div", "wcell"), v = h("b"); c.append(h("span", "", nm(e)), v); g.append(c); return [e, v]; });
+      ups.push(() => cells.forEach(([e, v]) => { const x = stateOf(e), n = parseFloat(x.state); v.textContent = (isNaN(n) ? x.state : fmt(n)) + (x.attributes.unit_of_measurement ? " " + x.attributes.unit_of_measurement : ""); })); }
+    if (buttons.length) actions(pInf, buttons);
     const dt = h("button", "ghostbtn", "Technische Details"); dt.type = "button"; const pre = h("pre", "techpre"); pre.hidden = true;
     dt.addEventListener("click", () => { pre.textContent = deviceDetails(id); pre.hidden = !pre.hidden; });
-    body.append(dt, pre);
+    pInf.append(dt, pre);
+    [["set", pSet], ["war", pWar], ["sta", pSta]].forEach(([k, p]) => { if (!p.children.length) tabBtn[k].hidden = true; });
+    showTab(pSet.children.length ? "set" : pWar.children.length ? "war" : pSta.children.length ? "sta" : "inf");
+
     const upd = s => {
-      const a = s.attributes, bat = a.battery_level;
-      status.textContent = VAC[s.state] || s.state;
-      sub.textContent = [bat != null ? `Akku ${bat} %` : "", a.status && String(a.status).toLowerCase() !== String(s.state).toLowerCase() ? a.status : ""].filter(Boolean).join(" · ");
-      sp && sp.set(a.fan_speed);
+      const a = s.attributes, bat = a.battery_level, st = s.state;
+      stat.replaceChildren(); const dot = h("i", "vdot" + (st === "error" ? " err" : st === "cleaning" ? " run" : ""));
+      stat.append(dot, h("span", "", [VAC[st] || st, bat != null ? `Akku ${bat} %` : "", a.status && String(a.status).toLowerCase() !== String(st).toLowerCase() ? a.status : ""].filter(Boolean).join(" · ")));
+      go.textContent = st === "cleaning" ? (has(4) ? "Pause" : "Stopp") : st === "paused" ? "Fortsetzen" : "Starten";
+      if (stop) stop.hidden = !["cleaning", "paused", "returning"].includes(st);
       const fr = findRooms(id); if (fr && fr.rooms.length) drawRooms(fr.rooms);
-      rel.update();
+      ups.forEach(fn => fn());
     };
-    upd.rel = rel.ids;
+    upd.rel = new Set(ids);
     return upd;
   },
 
