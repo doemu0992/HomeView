@@ -775,7 +775,7 @@ function applySize(el, size) {
 let editing = false;
 function setEditing(v) {
   editing = v; $("app").classList.toggle("editing", v);
-  closeSheet(); renderRooms(); renderGrid();
+  closeSheet(); renderRooms(); renderGrid(); scheduleFit();
 }
 function applyIcon(id, t) {
   const o = cfgOf().ent[id] || {};
@@ -819,6 +819,7 @@ function renderGrid() {
       return t.el;
     });
     $("grid").replaceChildren(...els);
+    scheduleFit();
     dbg("Kacheln gezeichnet: " + els.length + " (Raum " + room + ")");
     if (!els.length && !editing) { const n = document.createElement("div"); n.className = "empty"; n.textContent = "Keine Geräte gefunden (Entitäten: " + states.size + "). Prüfe unter „Anordnen → Geräte“ die Zuordnung."; $("grid").append(n); }
   });
@@ -1255,6 +1256,7 @@ function renderChips() {
   if (pw) { const w = num(pw.state), kw = (pw.attributes.unit_of_measurement || "W") === "W"; add("power", "power", kw ? fmt(w / 1000) + " kW" : fmt(w) + " " + pw.attributes.unit_of_measurement); }
 
   box.hidden = !chips.length;
+  scheduleFit();
   box.replaceChildren(...chips.map(c => {
     const el = document.createElement(c.on ? "button" : "div");
     if (c.on) { el.type = "button"; el.addEventListener("click", c.on); }
@@ -1265,6 +1267,25 @@ function renderChips() {
     return el;
   }));
 }
+
+/* ---------- Anpassung an die Bildschirmhöhe: mindestens zwei volle Kachelreihen ---------- */
+let fitRaf = 0;
+function fitLayout() {
+  const root = document.documentElement, g = $("grid");
+  if ($("app").hidden || !g.isConnected) return;
+  const ok = f => {
+    root.style.setProperty("--fit", f.toFixed(3));
+    const rem = parseFloat(getComputedStyle(root).fontSize);
+    return g.clientHeight >= rem * (9 * 2 + 1.1 + 2.4);   // zwei Reihen + Abstand + Innenabstand
+  };
+  if (ok(1)) return;
+  let lo = 0.5, hi = 1;                                      // größte Skalierung suchen, bei der zwei Reihen passen
+  for (let i = 0; i < 9; i++) { const mid = (lo + hi) / 2; ok(mid) ? (lo = mid) : (hi = mid); }
+  root.style.setProperty("--fit", lo.toFixed(3));
+}
+const scheduleFit = () => { cancelAnimationFrame(fitRaf); fitRaf = requestAnimationFrame(fitLayout); };
+window.addEventListener("resize", scheduleFit);
+window.addEventListener("orientationchange", () => setTimeout(scheduleFit, 250));
 
 /* ---------- Kiosk-Modus ---------- */
 let kiosk = false, fsActive = false, toastTimer;
@@ -1308,6 +1329,7 @@ function showSetup(msg) {
 function showApp() {
   $("boot").hidden = true; $("setup").hidden = true; $("app").hidden = false;
   [["Kopfzeile", renderHeader], ["Räume", renderRooms], ["Kacheln", renderGrid]].forEach(([n, f]) => { try { f(); dbg("OK " + n); } catch (e) { dbg("FEHLER " + n + ": " + (e && e.message)); window.dispatchEvent(new ErrorEvent("error", { message: n + ": " + (e && e.message) })); } });
+  dbg("Fenster: " + window.innerWidth + "×" + window.innerHeight + ", Schrift-Faktor: " + (getComputedStyle(document.documentElement).getPropertyValue("--fit") || "1"));
   dbg("Entitäten: " + states.size + ", Räume: " + areas.length + ", Zuhause-Geräte: " + visibleIds().length);
   if (new URLSearchParams(location.hash.slice(1)).get("kiosk") === "1") setKiosk(true, { fullscreen: false });
   try { navigator.wakeLock?.request("screen").catch(() => {}); } catch {}

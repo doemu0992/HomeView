@@ -48,6 +48,10 @@ Liegt `homeview.html` unter `/config/www/` und wird per iframe-Karte (`/local/ho
 
 Jeder Raum zeigt oben eine Chip-Leiste (Temperatur, Luftfeuchte, Lichter, offene Fenster/Türen, Schlösser, Medien, Alarm, Energie). Ausschalten unter „Anordnen → Chips“ oder mit `#chips=0` an der Adresse.
 
+## Bildschirmgröße
+
+HomeView passt Schrift und Abstände der Bildschirmhöhe an, sodass immer mindestens zwei volle Kachelreihen ohne Scrollen sichtbar sind (Chips und Raumleiste eingerechnet). Weitere Reihen erreichst du durch Wischen. Die Prüfseite `diagnose.html` zeigt die Größe deines Displays.
+
 ## Kiosk-Modus
 
 Der Knopf „Kiosk“ oben rechts startet den Vollbildmodus und blendet Bearbeiten-Elemente aus. Beenden: Uhrzeit 2 Sekunden gedrückt halten (oder Esc). Mit `&kiosk=1` am Ende der Adresse startet die Anzeige direkt im Kiosk-Modus (ohne Vollbild, das braucht einen Tipp).

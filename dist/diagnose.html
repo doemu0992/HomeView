@@ -11,6 +11,7 @@
   const flush = () => { out.textContent = L.join("\n"); };
   L.push("Browser: " + navigator.userAgent);
   L.push("Adresse: " + location.href);
+  L.push("Fenster (sichtbarer Bereich): " + window.innerWidth + " × " + window.innerHeight + " Pixel | Bildschirm: " + screen.width + " × " + screen.height + " | Pixelverhältnis: " + window.devicePixelRatio + " | " + (window.innerWidth >= window.innerHeight ? "Querformat" : "Hochformat"));
   let real = null;
   L.push("Im Rahmen (iframe): " + (window.parent !== window ? "ja" : "NEIN, direkt geöffnet"));
   try {

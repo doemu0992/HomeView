@@ -3,7 +3,7 @@
   --glass:rgba(255,255,255,.14); --glass-on:rgba(255,255,255,.93); --on-ink:#1c1c1e;
   --amber:#ffb340; --green:#34d399;
   /* Alles skaliert mit der kleineren Bildschirmseite: 1rem ≈ 1/52 der Breite (max. Seitenverhältnis 1.4:1) */
-  font-size:clamp(11px, calc(min(100vw, 150vh) / 60), 26px);
+  font-size:calc(clamp(11px, calc(min(100vw, 150vh) / 60), 26px) * var(--fit, 1));
 }
 *{box-sizing:border-box;margin:0}
 html{background:#1a1230}
