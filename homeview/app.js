@@ -116,6 +116,8 @@ const camStream = s => s.attributes.access_token && haBase
   ? `${haBase}/api/camera_proxy_stream/${s.entity_id}?token=${s.attributes.access_token}` : camUrl(s);
 const fmt = (n, d = 1) => Number(n).toLocaleString("de-DE", { maximumFractionDigits: d });
 const label = (map, k) => map[k] || (String(k).charAt(0).toUpperCase() + String(k).slice(1).replace(/_/g, " "));
+/* Helligkeit in Prozent: 1–255 → 1–100 %, auch die kleinste Stufe zeigt mindestens 1 % (Kachel und Detailfenster gleich) */
+const briPct = b => (b == null ? null : (b > 0 ? Math.max(1, Math.round(b / 2.55)) : 0));
 const feat = (a, bit) => a.supported_features == null || (a.supported_features & bit) !== 0;
 
 /* ---------- Farbe ---------- */
@@ -278,7 +280,7 @@ const DETAIL = {
     return s => {
       const a = s.attributes, on = s.state === "on";
       power.set(on);
-      br && br.set(a.brightness != null ? Math.round(a.brightness / 2.55) : null);
+      br && br.set(briPct(a.brightness));
       ct && ct.set(a.color_temp_kelvin);
       if (color) {
         const hs = a.hs_color || (a.rgb_color ? rgbToHs(a.rgb_color) : null);
@@ -507,7 +509,7 @@ const BUILDERS = {
     press(el, id, () => conn.call("light", "toggle", {}, id));
     return { el, update(s) {
       const a = s.attributes, on = s.state === "on";
-      const pct = on && a.brightness != null ? Math.round(a.brightness / 2.55) : null;
+      const pct = on ? briPct(a.brightness) : null;
       const rgb = on && a.rgb_color && a.color_mode && a.color_mode !== "color_temp" ? a.rgb_color : null;
       rgb ? el.style.setProperty("--tint", `rgb(${rgb.join(",")})`) : el.style.removeProperty("--tint");
       applyCommon(el, s, on, on ? (pct != null ? `An · ${pct} %` : "An") : "Aus");
