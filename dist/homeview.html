@@ -865,7 +865,9 @@ roomBox.replaceChildren(...rooms.map(r => { const b = h("button", "", r.name); b
 b.addEventListener("click", () => { sel.has(r.id) ? sel.delete(r.id) : sel.add(r.id); b.setAttribute("aria-pressed", String(sel.has(r.id))); msg.textContent = ""; }); return b; }));
 };
 const rel = relatedControls(body, id);
-none.textContent = "Dein Roboter meldet Home Assistant keine Raumliste. Für die Raumauswahl braucht es eine Integration, die Räume liefert (zum Beispiel Dreame über HACS). Unter „Technische Details“ siehst du, was dein Roboter meldet.";
+none.textContent = entityPlatform.get(id) === "matter"
+? "Über Matter bietet Home Assistant für diesen Roboter keine Raumauswahl an. Reinigungsmodus und Status stehen oben und unten. Für Räume braucht es eine Integration, die sie liefert (zum Beispiel „Dreame Vacuum“ aus HACS)."
+: "Dein Roboter meldet Home Assistant keine Raumliste. Für die Raumauswahl braucht es eine Integration, die Räume liefert (zum Beispiel Dreame über HACS). Unter „Technische Details“ siehst du, was dein Roboter meldet.";
 body.append(none);
 const dt = h("button", "ghostbtn", "Technische Details"); dt.type = "button"; const pre = h("pre", "techpre"); pre.hidden = true;
 dt.addEventListener("click", () => { pre.textContent = deviceDetails(id); pre.hidden = !pre.hidden; });
