@@ -630,6 +630,13 @@ const DETAIL = {
     return upd;
   },
 
+  sensor(id, body) {
+    const v = buildPowerView(body, [id], false);
+    $("sheetSub").textContent = "Leistungssensor";
+    const upd = () => v.update(); upd.ownSub = true;
+    return upd;
+  },
+
   alarm_control_panel(id, body, call) {
     const a0 = states.get(id).attributes;
     const code = a0.code_format != null;
@@ -720,6 +727,121 @@ function closeSheet() { sheetCtx?.update.cleanup?.(); $("sheet").hidden = true; 
 $("sheetClose").addEventListener("click", closeSheet);
 $("sheetBg").addEventListener("click", closeSheet);
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("sheet").hidden) closeSheet(); });
+
+/* ---------- Verbrauch: Chip, Kachel und Verlauf ---------- */
+let wsReq = null;                   // WebSocket-Anfrage (für den Verlauf), im Demo-Modus null
+const histCache = new Map();
+const isPower = s => s.attributes.device_class === "power";
+const pwUnitK = s => /^kw$/i.test(s.attributes.unit_of_measurement || "");
+const pwW = s => { const v = parseFloat(s.state); return isNaN(v) ? null : (pwUnitK(s) ? v * 1000 : v); };
+const pwLevel = w => (w < 150 ? "lo" : w < 500 ? "mid" : "hi");
+const fmtW = w => (Math.abs(w) >= 1000 ? fmt(w / 1000) + " kW" : fmt(w, w < 100 ? 1 : 0) + " W");
+const powerIds = pool => pool.filter(s => domainOf(s.entity_id) === "sensor" && isPower(s) && s.state !== "unavailable" && pwW(s) != null).map(s => s.entity_id);
+
+async function powerHistory(id, hours) {
+  const key = id + "|" + hours, c = histCache.get(key);
+  if (c && Date.now() - c.t < (hours <= 24 ? 120000 : 600000)) return c.v;
+  const end = Date.now(), start = end - hours * 3600e3, s = states.get(id), k = s && pwUnitK(s) ? 1000 : 1;
+  let pts = [];
+  if (wsReq) {
+    try {
+      const r = await wsReq({ type: "history/history_during_period", start_time: new Date(start).toISOString(), end_time: new Date(end).toISOString(), entity_ids: [id], minimal_response: true, no_attributes: true, significant_changes_only: false });
+      pts = ((r && r[id]) || []).map(p => [(p.lu != null ? p.lu * 1000 : p.last_updated ? Date.parse(p.last_updated) : start), parseFloat(p.s != null ? p.s : p.state) * k]).filter(p => !isNaN(p[0]) && !isNaN(p[1]));
+    } catch { pts = null; }
+  } else {
+    let seed = [...id].reduce((a, ch) => a + ch.charCodeAt(0), 7), v = Math.max(5, s ? pwW(s) || 5 : 5);
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647, base = v;
+    for (let t = start; t <= end; t += 300000) { v = Math.max(0, v + (rnd() - .5) * base * .35 + (base - v) * .12); if (rnd() < .03) v += base * rnd(); pts.push([t, v]); }
+  }
+  if (pts) histCache.set(key, { t: Date.now(), v: pts });
+  return pts;
+}
+function bucketSeries(pts, start, end, n) {
+  const out = new Array(n).fill(null), step = (end - start) / n; let i = 0, last = null;
+  for (let b = 0; b < n; b++) {
+    const t0 = start + b * step, t1 = t0 + step; let sum = 0, cnt = 0;
+    while (i < pts.length && pts[i][0] < t1) { if (pts[i][0] >= t0) { sum += pts[i][1]; cnt++; } last = pts[i][1]; i++; }
+    out[b] = cnt ? sum / cnt : last;
+  }
+  const first = out.find(v => v != null);
+  return out.map(v => (v == null ? (first == null ? 0 : first) : v));
+}
+async function powerSeries(ids, hours, n) {
+  const end = Date.now(), start = end - hours * 3600e3, all = await Promise.all(ids.map(id => powerHistory(id, hours)));
+  const ok = all.filter(Boolean); if (!ok.length) return null;
+  const arrs = ok.map(p => bucketSeries(p, start, end, n));
+  return arrs[0].map((_, i) => arrs.reduce((s, a) => s + a[i], 0));
+}
+const sparkSvg = (a, color, tall) => {
+  const mx = Math.max(...a, 1) * 1.1, W = 300, H = 60, x = i => i * W / (a.length - 1), y = v => H - v / mx * H;
+  const line = a.map((v, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(v).toFixed(1)).join(" "), gid = "pg" + Math.random().toString(36).slice(2, 7);
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".45"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs><path d="${line} L${W} ${H} L0 ${H}Z" fill="url(#${gid})"/><path d="${line}" fill="none" stroke="${color}" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>`;
+};
+const PW_COL = { lo: "#5be08a", mid: "#ffb54d", hi: "#ff6b5e" };
+
+function powerTile(id) {
+  const el = tileShell("metric pwt wide", `<div class="sp"></div><div class="pt-top"><span class="bolt">${icon("power")}</span><span class="name"></span></div><div class="pt-body"><div class="big"></div><div class="state"></div><div class="pt-stats"></div></div>`);
+  press(el, id, () => openSheet(id));
+  let loaded = 0, pts = null, lvl = "lo";
+  const draw = () => {
+    const sp = el.querySelector(".sp"), big = el.dataset.size === "2x2" || el.dataset.size === "1x2";
+    if (!pts) { sp.replaceChildren(); return; }
+    const a = big ? pts.day : pts.day.slice(-Math.round(pts.day.length / 4));
+    sp.innerHTML = sparkSvg(a, PW_COL[lvl]);
+    const st = el.querySelector(".pt-stats");
+    st.replaceChildren(...[["Spitze", fmtW(Math.max(...pts.day))], ["Ø 24 Std", fmtW(pts.day.reduce((x, y) => x + y, 0) / pts.day.length)], ["24 Std", fmt(pts.day.reduce((x, y) => x + y, 0) / pts.day.length * 24 / 1000) + " kWh"]].map(([k, v]) => { const d = h("div", "stat", k); d.append(h("b", "", v)); return d; }));
+  };
+  return { el, update(s) {
+    el.classList.toggle("unavailable", s.state === "unavailable");
+    setText(el, ".name", nameOf(s));
+    const w = pwW(s); lvl = w == null ? "lo" : pwLevel(w);
+    el.style.setProperty("--c", PW_COL[lvl]); el.dataset.lvl = lvl;
+    const big = el.querySelector(".big"); big.replaceChildren(w == null ? s.state : w >= 1000 ? fmt(w / 1000) : fmt(w, w < 100 ? 1 : 0), h("small", "", w != null && w >= 1000 ? "kW" : "W"));
+    setText(el, ".state", s.state === "unavailable" ? "Nicht erreichbar" : w != null && w < 1 ? "Aus" : "Aktuell");
+    if (Date.now() - loaded > 300000) { loaded = Date.now(); powerSeries([id], 24, 72).then(a => { if (a) { pts = { day: a }; draw(); } }); }
+    draw();
+  }};
+}
+
+function buildPowerView(body, ids, withList) {
+  let range = "d", token = 0;
+  const RG = { h: { hours: 1, n: 60, l: ["vor 60 Min", "vor 30 Min", "jetzt"] }, d: { hours: 24, n: 96, l: ["vor 24 Std", "vor 12 Std", "jetzt"] }, w: { hours: 168, n: 84, l: ["vor 7 Tagen", "vor 3 Tagen", "jetzt"] } };
+  const big = h("div", "pv-big"), val = h("span", "pv-val"); big.append(val);
+  const sg = seg(body, { label: "Zeitraum", options: [["h", "1 Std"], ["d", "24 Std"], ["w", "7 Tage"]], on: v => { range = v; sg.set(v); load(); } });
+  body.insertBefore(big, sg.w);
+  const chart = h("div", "pv-chart"), stats = h("div", "pv-stats"); body.append(chart, stats);
+  const listBox = withList ? h("div", "vgrp") : null; if (listBox) body.append(listBox);
+  const cur = () => ids.map(i => states.get(i)).filter(Boolean);
+  const total = () => cur().reduce((s, x) => s + (pwW(x) || 0), 0);
+  const upd = () => {
+    const w = total(), l = pwLevel(w), t = fmtW(w).split(" ");
+    val.style.color = PW_COL[l]; val.replaceChildren(t[0], h("small", "", t[1]));
+    if (listBox) {
+      const items = cur().map(x => [x, pwW(x) || 0]).sort((a, b) => b[1] - a[1]), tot = items.reduce((s, x) => s + x[1], 0) || 1;
+      listBox.replaceChildren(h("h4", "", "Verbraucher"), ...items.map(([x, w2]) => {
+        const r = h("button", "pv-dev"); r.type = "button"; r.style.setProperty("--c", PW_COL[pwLevel(w2)]);
+        const bar = h("div", "pv-bar"), i = h("i"); i.style.width = Math.max(3, w2 / tot * 100) + "%"; bar.append(i);
+        r.append(h("span", "", nameOf(x)), h("b", "", fmtW(w2)), bar); r.addEventListener("click", () => openSheet(x.entity_id)); return r; }));
+    }
+  };
+  async function load() {
+    const my = ++token, R = RG[range];
+    chart.textContent = "Verlauf wird geladen …"; chart.className = "pv-chart pv-msg";
+    const a = await powerSeries(ids, R.hours, R.n);
+    if (my !== token) return;
+    if (!a) { chart.textContent = "Für diesen Zeitraum ist kein Verlauf verfügbar."; return; }
+    const c = PW_COL[pwLevel(total())], mx = Math.max(...a), mn = Math.min(...a), av = a.reduce((s, x) => s + x, 0) / a.length;
+    const top = Math.max(50, Math.ceil(mx * 1.15 / 50) * 50), W = 600, H = 230, L = 38, B = 22, T = 10, X = i => L + i * (W - L - 6) / (a.length - 1), Y = v => T + (H - B - T) * (1 - v / top);
+    let g = ""; for (let i = 0; i <= 4; i++) { const v = top * i / 4, y = Y(v); g += `<line x1="${L}" x2="${W - 6}" y1="${y}" y2="${y}" stroke="rgba(255,255,255,.1)"/><text x="${L - 6}" y="${y + 3}" text-anchor="end">${Math.round(v)}</text>`; }
+    const line = a.map((v, i) => (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1)).join(" "), mi = a.indexOf(mx), gid = "pc" + Math.random().toString(36).slice(2, 7);
+    chart.className = "pv-chart";
+    chart.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Verlauf des Verbrauchs"><defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c}" stop-opacity=".5"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></linearGradient></defs>${g}<path d="${line} L${X(a.length - 1)} ${H - B} L${X(0)} ${H - B}Z" fill="url(#${gid})"/><path d="${line}" fill="none" stroke="${c}" stroke-width="2.2" stroke-linejoin="round"/><circle cx="${X(a.length - 1)}" cy="${Y(a[a.length - 1])}" r="4.5" fill="#fff" stroke="${c}" stroke-width="2"/><circle cx="${X(mi)}" cy="${Y(mx)}" r="3" fill="${c}"/><text x="${Math.min(W - 30, Math.max(L + 20, X(mi)))}" y="${Math.max(10, Y(mx) - 7)}" text-anchor="middle" style="fill:#fff">${Math.round(mx)} W</text><text x="${L}" y="${H - 5}">${R.l[0]}</text><text x="${(W + L) / 2}" y="${H - 5}" text-anchor="middle">${R.l[1]}</text><text x="${W - 6}" y="${H - 5}" text-anchor="end">${R.l[2]}</text></svg>`;
+    stats.replaceChildren(...[["Spitze", fmtW(mx)], ["Durchschnitt", fmtW(av)], ["Minimum", fmtW(mn)], ["Energie", fmt(av * R.hours / 1000) + " kWh"]].map(([k, v]) => { const d = h("div", "", k); d.append(h("b", "", v)); return d; }));
+  }
+  sg.set(range); upd(); load();
+  return { update: upd };
+}
+function openPowerPanel(ids, title) { openPanel(title, body => buildPowerView(body, ids, ids.length > 1)); }
 
 /* ---------- Kachel-Fabrik ---------- */
 function tileShell(cls, html, btn = true) {
@@ -920,6 +1042,7 @@ const BUILDERS = {
     }};
   },
   sensor(id, s0) {
+    if (isPower(s0)) return powerTile(id);
     const power = ["power", "energy"].includes(s0.attributes.device_class);
     const el = tileShell("metric" + (power ? " wide" : ""), `<div class="name"></div><div class="big"></div>`, false);
     return { el, update(s) {
@@ -1552,8 +1675,11 @@ function renderChips() {
   if (playing.length) add("media", "media", playing.length === 1 ? (playing[0].attributes.media_title || "Spielt") : `${playing.length} spielen`, { cls: "active" });
   const alarm = dom("alarm_control_panel")[0];
   if (alarm && room === HOME) add("alarm", "shield", ALARM[alarm.state] || alarm.state, { cls: alarm.state === "triggered" ? "warn" : alarm.state.startsWith("armed") ? "active" : "", on: () => openSheet(alarm.entity_id) });
-  const pw = room === HOME ? dom("sensor").find(s => s.attributes.device_class === "power" && num(s.state) != null) : null;
-  if (pw) { const w = num(pw.state), kw = (pw.attributes.unit_of_measurement || "W") === "W"; add("power", "power", kw ? fmt(w / 1000) + " kW" : fmt(w) + " " + pw.attributes.unit_of_measurement); }
+  const pwIds = powerIds(pool);
+  if (pwIds.length) {
+    const w = pwIds.reduce((a, i) => a + (pwW(states.get(i)) || 0), 0);
+    add("power", "power", fmtW(w), { cls: "pw pw-" + pwLevel(w), on: () => openPowerPanel(pwIds, room === HOME ? "Gesamtverbrauch" : "Verbrauch " + (roomList().find(r => r.id === room)?.name || "")) });
+  }
 
   box.hidden = !chips.length;
   scheduleFit();
@@ -1687,6 +1813,7 @@ async function startViaConn(promise) {
   dbg("Modus: Anmeldung über hassConnection");
   const { conn: c } = await promise;
   const request = msg => c.sendMessagePromise(msg);
+  wsReq = request;
   conn = { close() {}, call: (domain, service, data = {}, id) =>
     request({ type: "call_service", domain, service, service_data: data, ...(id ? { target: { entity_id: id } } : {}) }).then(() => true, () => false) };
   await loadRegistry({ request });
@@ -1698,6 +1825,7 @@ async function startViaConn(promise) {
 async function startParent(ha) {
   dbg("Modus: Anmeldung über Dashboard");
   const request = msg => ha.hass.callWS(msg);
+  wsReq = request;
   conn = { close() {}, call: (domain, service, data = {}, id) =>
     request({ type: "call_service", domain, service, service_data: data, ...(id ? { target: { entity_id: id } } : {}) }).then(() => true, () => false) };
   loadFromHass(ha);
@@ -1719,6 +1847,7 @@ function startLive({ url, token }) {
     onStatus(ok) { $("banner").hidden = ok; },
     async onReady(api) {
       try {
+        wsReq = api.request;
         await loadRegistry(api);
         await enableRemoteLayout(api.request);
         await api.subscribe();
@@ -1777,6 +1906,9 @@ function startDemo() {
     S("camera.eingang", "streaming", { friendly_name: "Eingang", supported_features: 3, entity_picture: demoFrame("Eingang", 205) }),
     S("camera.garten", "idle", { friendly_name: "Garten", supported_features: 3, entity_picture: demoFrame("Garten", 130) }),
     S("sensor.leistung", "1240", { friendly_name: "Energie jetzt", device_class: "power", unit_of_measurement: "W" }),
+    S("sensor.p_kueche", "26.5", { friendly_name: "Verbrauch Küche", device_class: "power", unit_of_measurement: "W" }),
+    S("sensor.p_ofen", "0", { friendly_name: "Backofen", device_class: "power", unit_of_measurement: "W" }),
+    S("sensor.p_tv", "84", { friendly_name: "TV Wohnzimmer", device_class: "power", unit_of_measurement: "W" }),
     S("sensor.temp_aussen", "13.4", { friendly_name: "Außentemperatur", device_class: "temperature", unit_of_measurement: "°C" }),
     S("sensor.temp_kueche", "22.3", { friendly_name: "Temperatur Küche", device_class: "temperature", unit_of_measurement: "°C" }),
     S("sensor.temp_schlaf", "19.2", { friendly_name: "Temperatur Schlafzimmer", device_class: "temperature", unit_of_measurement: "°C" }),
@@ -1802,7 +1934,7 @@ function startDemo() {
   areas = [{ area_id: "wz", name: "Wohnzimmer" }, { area_id: "ku", name: "Küche" }, { area_id: "sz", name: "Schlafzimmer" }, { area_id: "au", name: "Außen" }, { area_id: "bu", name: "Büro" }];
   Object.entries({ "climate.wohnzimmer": "wz", "light.stehlampe": "wz", "light.decke": "wz", "fan.ventilator": "wz", "sensor.feuchte_wz": "wz", "binary_sensor.fenster_wz": "wz",
     "media_player.kueche": "ku", "sensor.temp_kueche": "ku", "sensor.temp_schlaf": "sz", "sensor.feuchte_schlaf": "sz", "light.kueche": "ku", "switch.kaffee": "ku", "light.bett": "sz", "light.luefter_bad": "sz", "humidifier.schlafzimmer": "sz",
-    "lock.haustuer": "au", "camera.eingang": "au", "camera.garten": "au", "alarm_control_panel.haus": "au", "cover.rollo": "au", "sensor.temp_aussen": "au" }).forEach(([k, v]) => entityArea.set(k, v));
+    "lock.haustuer": "au", "camera.eingang": "au", "camera.garten": "au", "alarm_control_panel.haus": "au", "cover.rollo": "au", "sensor.temp_aussen": "au", "sensor.p_kueche": "ku", "sensor.p_ofen": "ku", "sensor.p_tv": "wz" }).forEach(([k, v]) => entityArea.set(k, v));
 
   const set = (id, state, extra = {}) => {
     const o = states.get(id) || extras.get(id), n = { ...o, state, attributes: { ...o.attributes, ...extra } };

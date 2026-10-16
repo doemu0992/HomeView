@@ -95,3 +95,7 @@ Unterstützt: Alarmanlagen (Code-Tastatur, Zuhause/Abwesend/Nacht/Urlaub), Kamer
 ## Saugroboter
 
 Das Fenster eines Saugroboters zeigt oben Status, Akku und die Knöpfe Starten/Pause, Station und Finden. Darunter liegen Kurzbefehle (Räume, Modus, Saugkraft und Wassermenge in einem Tipp, lange drücken zum Bearbeiten), die Auswahl für Reinigungsmodus, Saugkraft und Wassermenge sowie die Räume als Kacheln. Alle weiteren Einstellungen des Geräts liegen in den Reitern Einstellungen, Wartung, Station und Info. Kurzbefehle werden mit dem Layout in Home Assistant gespeichert.
+
+## Verbrauch
+
+Sensoren mit der Geräteklasse „Leistung“ erscheinen als Chip und als Kachel. Der Chip zeigt die Summe der Leistungssensoren des gewählten Raums, in „Zuhause“ die Summe aller. Die Farbe richtet sich nach der Last (grün unter 150 W, gelb bis 500 W, rot darüber). Die Kachel gibt es in drei Größen mit Verlauf. Ein Tipp öffnet den Verlauf für 1 Std, 24 Std und 7 Tage. Der Verlauf kommt aus dem Verlauf (Recorder) von Home Assistant.
