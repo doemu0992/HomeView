@@ -631,7 +631,7 @@ const DETAIL = {
   },
 
   sensor(id, body) {
-    const v = buildPowerView(body, [id], false);
+    const v = buildPowerView(body, [id], powerList([id]));
     $("sheetSub").textContent = "Leistungssensor";
     const upd = () => v.update(); upd.ownSub = true;
     return upd;
@@ -736,7 +736,13 @@ const pwUnitK = s => /^kw$/i.test(s.attributes.unit_of_measurement || "");
 const pwW = s => { const v = parseFloat(s.state); return isNaN(v) ? null : (pwUnitK(s) ? v * 1000 : v); };
 const pwLevel = w => (w < 150 ? "lo" : w < 500 ? "mid" : "hi");
 const fmtW = w => (Math.abs(w) >= 1000 ? fmt(w / 1000) + " kW" : fmt(w, w < 100 ? 1 : 0) + " W");
-const powerIds = pool => pool.filter(s => domainOf(s.entity_id) === "sensor" && isPower(s) && s.state !== "unavailable" && pwW(s) != null).map(s => s.entity_id);
+/* Powercalc-Gruppen führen ihre Mitglieder im Attribut „entities“. Mitglieder einer Gruppe werden nicht doppelt gezählt. */
+const groupMembers = s => (Array.isArray(s.attributes.entities) ? s.attributes.entities : []).filter(e => states.has(e) && isPower(states.get(e)));
+function powerIds(pool) {
+  const c = pool.filter(s => domainOf(s.entity_id) === "sensor" && isPower(s) && s.state !== "unavailable" && pwW(s) != null);
+  const covered = new Set(c.flatMap(s => groupMembers(s)));
+  return c.filter(s => !covered.has(s.entity_id)).map(s => s.entity_id);
+}
 
 async function powerHistory(id, hours) {
   const key = id + "|" + hours, c = histCache.get(key);
@@ -803,7 +809,8 @@ function powerTile(id) {
   }};
 }
 
-function buildPowerView(body, ids, withList) {
+function buildPowerView(body, ids, listIds) {
+  const withList = listIds.length > 0;
   let range = "d", token = 0;
   const RG = { h: { hours: 1, n: 60, l: ["vor 60 Min", "vor 30 Min", "jetzt"] }, d: { hours: 24, n: 96, l: ["vor 24 Std", "vor 12 Std", "jetzt"] }, w: { hours: 168, n: 84, l: ["vor 7 Tagen", "vor 3 Tagen", "jetzt"] } };
   const big = h("div", "pv-big"), val = h("span", "pv-val"); big.append(val);
@@ -817,7 +824,7 @@ function buildPowerView(body, ids, withList) {
     const w = total(), l = pwLevel(w), t = fmtW(w).split(" ");
     val.style.color = PW_COL[l]; val.replaceChildren(t[0], h("small", "", t[1]));
     if (listBox) {
-      const items = cur().map(x => [x, pwW(x) || 0]).sort((a, b) => b[1] - a[1]), tot = items.reduce((s, x) => s + x[1], 0) || 1;
+      const items = listIds.map(i => states.get(i)).filter(Boolean).map(x => [x, pwW(x) || 0]).sort((a, b) => b[1] - a[1]), tot = items.reduce((s, x) => s + x[1], 0) || 1;
       listBox.replaceChildren(h("h4", "", "Verbraucher"), ...items.map(([x, w2]) => {
         const r = h("button", "pv-dev"); r.type = "button"; r.style.setProperty("--c", PW_COL[pwLevel(w2)]);
         const bar = h("div", "pv-bar"), i = h("i"); i.style.width = Math.max(3, w2 / tot * 100) + "%"; bar.append(i);
@@ -841,7 +848,8 @@ function buildPowerView(body, ids, withList) {
   sg.set(range); upd(); load();
   return { update: upd };
 }
-function openPowerPanel(ids, title) { openPanel(title, body => buildPowerView(body, ids, ids.length > 1)); }
+const powerList = ids => (ids.length > 1 ? ids : ids.length && states.has(ids[0]) ? groupMembers(states.get(ids[0])) : []);
+function openPowerPanel(ids, title) { openPanel(title, body => buildPowerView(body, ids, powerList(ids))); }
 
 /* ---------- Kachel-Fabrik ---------- */
 function tileShell(cls, html, btn = true) {
@@ -1906,7 +1914,8 @@ function startDemo() {
     S("camera.eingang", "streaming", { friendly_name: "Eingang", supported_features: 3, entity_picture: demoFrame("Eingang", 205) }),
     S("camera.garten", "idle", { friendly_name: "Garten", supported_features: 3, entity_picture: demoFrame("Garten", 130) }),
     S("sensor.leistung", "1240", { friendly_name: "Energie jetzt", device_class: "power", unit_of_measurement: "W" }),
-    S("sensor.p_kueche", "26.5", { friendly_name: "Verbrauch Küche", device_class: "power", unit_of_measurement: "W" }),
+    S("sensor.p_kueche", "26.5", { friendly_name: "Verbrauch Küche Powersensor", device_class: "power", unit_of_measurement: "W", entities: ["sensor.p_ofen", "sensor.p_kaffee"] }),
+    S("sensor.p_kaffee", "26.5", { friendly_name: "Kaffeemaschine", device_class: "power", unit_of_measurement: "W" }),
     S("sensor.p_ofen", "0", { friendly_name: "Backofen", device_class: "power", unit_of_measurement: "W" }),
     S("sensor.p_tv", "84", { friendly_name: "TV Wohnzimmer", device_class: "power", unit_of_measurement: "W" }),
     S("sensor.temp_aussen", "13.4", { friendly_name: "Außentemperatur", device_class: "temperature", unit_of_measurement: "°C" }),
@@ -1934,7 +1943,7 @@ function startDemo() {
   areas = [{ area_id: "wz", name: "Wohnzimmer" }, { area_id: "ku", name: "Küche" }, { area_id: "sz", name: "Schlafzimmer" }, { area_id: "au", name: "Außen" }, { area_id: "bu", name: "Büro" }];
   Object.entries({ "climate.wohnzimmer": "wz", "light.stehlampe": "wz", "light.decke": "wz", "fan.ventilator": "wz", "sensor.feuchte_wz": "wz", "binary_sensor.fenster_wz": "wz",
     "media_player.kueche": "ku", "sensor.temp_kueche": "ku", "sensor.temp_schlaf": "sz", "sensor.feuchte_schlaf": "sz", "light.kueche": "ku", "switch.kaffee": "ku", "light.bett": "sz", "light.luefter_bad": "sz", "humidifier.schlafzimmer": "sz",
-    "lock.haustuer": "au", "camera.eingang": "au", "camera.garten": "au", "alarm_control_panel.haus": "au", "cover.rollo": "au", "sensor.temp_aussen": "au", "sensor.p_kueche": "ku", "sensor.p_ofen": "ku", "sensor.p_tv": "wz" }).forEach(([k, v]) => entityArea.set(k, v));
+    "lock.haustuer": "au", "camera.eingang": "au", "camera.garten": "au", "alarm_control_panel.haus": "au", "cover.rollo": "au", "sensor.temp_aussen": "au", "sensor.p_kueche": "ku", "sensor.p_ofen": "ku", "sensor.p_kaffee": "ku", "sensor.p_tv": "wz" }).forEach(([k, v]) => entityArea.set(k, v));
 
   const set = (id, state, extra = {}) => {
     const o = states.get(id) || extras.get(id), n = { ...o, state, attributes: { ...o.attributes, ...extra } };
