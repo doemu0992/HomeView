@@ -1787,13 +1787,41 @@ function handleStateEvent(ev) {
     if (["weather", "climate"].includes(domainOf(entity_id))) renderHeader();
   } else { states.delete(entity_id); tiles.delete(entity_id); renderGrid(); renderChips(); }
 }
+/* Die Ansicht ist für alle Benutzer gleich: sie liegt im „System“-Speicher von Home Assistant (alle lesen, nur Administratoren schreiben).
+   Ohne System-Speicher oder ohne Schreibrecht bleibt das Benutzerprofil als Rückfall. */
 async function enableRemoteLayout(request) {
-  try {
-    const r = await request({ type: "frontend/get_user_data", key: "homeview_layout" });
-    if (r && r.value && typeof r.value === "object") layout = r.value;
-  } catch {}
-  let lt;
-  remoteSave = () => { clearTimeout(lt); lt = setTimeout(() => request({ type: "frontend/set_user_data", key: "homeview_layout", value: layout }).catch(() => {}), 400); };
+  const KEY = "homeview_layout", isObj = v => v && typeof v === "object" && !Array.isArray(v);
+  let shared = null, sharedOk = false, own = null;
+  try { const r = await request({ type: "frontend/get_system_data", key: KEY }); sharedOk = true; if (r && isObj(r.value)) shared = r.value; } catch {}
+  try { const r = await request({ type: "frontend/get_user_data", key: KEY }); if (r && isObj(r.value)) own = r.value; } catch {}
+  if (shared) layout = shared; else if (own) layout = own;
+  let canShare = sharedOk, warned = false, lt;
+  const saveOwn = () => request({ type: "frontend/set_user_data", key: KEY, value: layout }).catch(() => {});
+  const saveShared = async () => {
+    try { await request({ type: "frontend/set_system_data", key: KEY, value: layout }); return true; }
+    catch { return false; }
+  };
+  // Erste Einrichtung: das bisherige persönliche Layout für alle veröffentlichen (klappt nur als Administrator)
+  if (!shared && own && canShare) { if (!(await saveShared())) canShare = false; }
+  remoteSave = () => {
+    clearTimeout(lt);
+    lt = setTimeout(async () => {
+      if (canShare && await saveShared()) return;
+      canShare = false; saveOwn();
+      if (!warned) { warned = true; toast("Nur Administratoren ändern die gemeinsame Ansicht. Diese Änderung gilt nur für dich."); }
+    }, 400);
+  };
+  // Änderungen von anderen Geräten übernehmen
+  if (sharedOk) setInterval(async () => {
+    if (editing || !$("sheet").hidden) return;
+    try {
+      const r = await request({ type: "frontend/get_system_data", key: KEY });
+      if (r && isObj(r.value) && JSON.stringify(r.value) !== JSON.stringify(layout)) {
+        layout = r.value; try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); } catch {}
+        tiles.clear(); renderHeader(); renderRooms(); renderGrid(); renderChips();
+      }
+    } catch {}
+  }, 60000);
 }
 
 /* Läuft HomeView als iframe unter /local/ in Home Assistant, nutzt es die bestehende Anmeldung des Dashboards: kein Token nötig */

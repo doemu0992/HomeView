@@ -99,3 +99,7 @@ Das Fenster eines Saugroboters zeigt oben Status, Akku und die Knöpfe Starten/P
 ## Verbrauch
 
 Sensoren mit der Geräteklasse „Leistung“ erscheinen als Chip und als Kachel. Der Chip zeigt die Summe der Leistungssensoren des gewählten Raums, in „Zuhause“ die Summe aller. Die Farbe richtet sich nach der Last (grün unter 150 W, gelb bis 500 W, rot darüber). Die Kachel gibt es in drei Größen mit Verlauf. Ein Tipp öffnet den Verlauf für 1 Std, 24 Std und 7 Tage. Der Verlauf kommt aus dem Verlauf (Recorder) von Home Assistant.
+
+## Gemeinsame Ansicht
+
+Räume, Reihenfolge, Größen, Namen, Symbole und Chips werden im gemeinsamen Speicher von Home Assistant abgelegt und gelten für alle Benutzer. Ändern dürfen sie nur Administratoren. Ein Benutzer ohne Administratorrechte sieht die gemeinsame Ansicht, seine Änderungen gelten nur für ihn. Beim ersten Start als Administrator wird das bisherige persönliche Layout für alle übernommen. Andere Geräte übernehmen Änderungen innerhalb einer Minute.
