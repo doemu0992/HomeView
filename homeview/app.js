@@ -1683,8 +1683,8 @@ function renderChips() {
   if (playing.length) add("media", "media", playing.length === 1 ? (playing[0].attributes.media_title || "Spielt") : `${playing.length} spielen`, { cls: "active" });
   const alarm = dom("alarm_control_panel")[0];
   if (alarm && room === HOME) add("alarm", "shield", ALARM[alarm.state] || alarm.state, { cls: alarm.state === "triggered" ? "warn" : alarm.state.startsWith("armed") ? "active" : "", on: () => openSheet(alarm.entity_id) });
-  // Raum: Leistungssensoren, die zum Raum gehören (auch ausgeblendete), außer solche, die in HA einem anderen Raum zugeordnet sind. Zuhause: Summe aller.
-  const pwIds = powerIds(room === HOME ? pool : members.filter(s => !entityArea.has(s.entity_id) || entityArea.get(s.entity_id) === room));
+  // Raum: alle Leistungssensoren, die in HomeView zum Raum gehören (auch ausgeblendete). Die Raumzuteilung in HA zählt nicht. Zuhause: Summe aller.
+  const pwIds = powerIds(room === HOME ? pool : members);
   if (pwIds.length) {
     const w = pwIds.reduce((a, i) => a + (pwW(states.get(i)) || 0), 0);
     add("power", "power", fmtW(w), { cls: "pw pw-" + pwLevel(w), on: () => openPowerPanel(pwIds, room === HOME ? "Gesamtverbrauch" : "Verbrauch " + (roomList().find(r => r.id === room)?.name || "")) });
