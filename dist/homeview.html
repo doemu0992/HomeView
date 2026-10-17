@@ -754,7 +754,8 @@ if (e.device_id) entityDevice.set(e.entity_id, e.device_id);
 if (e.platform) entityPlatform.set(e.entity_id, e.platform);
 if (e.hidden_by || e.disabled_by || e.entity_category) {
 const s0 = states.get(e.entity_id);
-if (s0 && e.entity_category && !e.hidden_by && !e.disabled_by) extras.set(e.entity_id, s0); else ignored.add(e.entity_id);
+// Powercalc blendet die Mitglieder einer Gruppe aus: ihre Leistungswerte bleiben für die Gruppenansicht erhalten
+if (s0 && !e.disabled_by && ((e.entity_category && !e.hidden_by) || s0.attributes.device_class === "power")) extras.set(e.entity_id, s0); else ignored.add(e.entity_id);
 states.delete(e.entity_id);
 }
 const a = e.area_id || devArea.get(e.device_id);
@@ -1146,7 +1147,7 @@ return upd;
 sensor(id, body) {
 const v = buildPowerView(body, [id], powerList([id]));
 $("sheetSub").textContent = "Leistungssensor";
-const upd = () => v.update(); upd.ownSub = true;
+const upd = () => v.update(); upd.ownSub = true; upd.rel = new Set(powerList([id]));
 return upd;
 },
 alarm_control_panel(id, body, call) {
@@ -1243,9 +1244,9 @@ const isPower = s => s.attributes.device_class === "power";
 const pwUnitK = s => /^kw$/i.test(s.attributes.unit_of_measurement || "");
 const pwW = s => { const v = parseFloat(s.state); return isNaN(v) ? null : (pwUnitK(s) ? v * 1000 : v); };
 const pwLevel = w => (w < 150 ? "lo" : w < 500 ? "mid" : "hi");
-const fmtW = w => (Math.abs(w) >= 1000 ? fmt(w / 1000) + " kW" : fmt(w, w < 100 ? 1 : 0) + " W");
+const fmtW = w => (Math.abs(w) >= 1000 ? fmt(w / 1000) + " kW" : fmt(w, w < 1 ? 2 : w < 100 ? 1 : 0) + " W");
 /* Powercalc-Gruppen führen ihre Mitglieder im Attribut „entities“. Mitglieder einer Gruppe werden nicht doppelt gezählt. */
-const groupMembers = s => (Array.isArray(s.attributes.entities) ? s.attributes.entities : []).filter(e => states.has(e) && isPower(states.get(e)));
+const groupMembers = s => (Array.isArray(s.attributes.entities) ? s.attributes.entities : []).filter(e => stateOf(e) && isPower(stateOf(e)));
 function powerIds(pool) {
 const c = pool.filter(s => domainOf(s.entity_id) === "sensor" && isPower(s) && s.state !== "unavailable" && pwW(s) != null);
 const covered = new Set(c.flatMap(s => groupMembers(s)));
@@ -1254,7 +1255,7 @@ return c.filter(s => !covered.has(s.entity_id)).map(s => s.entity_id);
 async function powerHistory(id, hours) {
 const key = id + "|" + hours, c = histCache.get(key);
 if (c && Date.now() - c.t < (hours <= 24 ? 120000 : 600000)) return c.v;
-const end = Date.now(), start = end - hours * 3600e3, s = states.get(id), k = s && pwUnitK(s) ? 1000 : 1;
+const end = Date.now(), start = end - hours * 3600e3, s = stateOf(id), k = s && pwUnitK(s) ? 1000 : 1;
 let pts = [];
 if (wsReq) {
 try {
@@ -1323,13 +1324,13 @@ const sg = seg(body, { label: "Zeitraum", options: [["h", "1 Std"], ["d", "24 St
 body.insertBefore(big, sg.w);
 const chart = h("div", "pv-chart"), stats = h("div", "pv-stats"); body.append(chart, stats);
 const listBox = withList ? h("div", "vgrp") : null; if (listBox) body.append(listBox);
-const cur = () => ids.map(i => states.get(i)).filter(Boolean);
+const cur = () => ids.map(i => stateOf(i)).filter(Boolean);
 const total = () => cur().reduce((s, x) => s + (pwW(x) || 0), 0);
 const upd = () => {
 const w = total(), l = pwLevel(w), t = fmtW(w).split(" ");
 val.style.color = PW_COL[l]; val.replaceChildren(t[0], h("small", "", t[1]));
 if (listBox) {
-const items = listIds.map(i => states.get(i)).filter(Boolean).map(x => [x, pwW(x) || 0]).sort((a, b) => b[1] - a[1]), tot = items.reduce((s, x) => s + x[1], 0) || 1;
+const items = listIds.map(i => stateOf(i)).filter(Boolean).map(x => [x, pwW(x) || 0]).sort((a, b) => b[1] - a[1]), tot = items.reduce((s, x) => s + x[1], 0) || 1;
 listBox.replaceChildren(h("h4", "", "Verbraucher"), ...items.map(([x, w2]) => {
 const r = h("button", "pv-dev"); r.type = "button"; r.style.setProperty("--c", PW_COL[pwLevel(w2)]);
 const bar = h("div", "pv-bar"), i = h("i"); i.style.width = Math.max(3, w2 / tot * 100) + "%"; bar.append(i);
@@ -1354,7 +1355,12 @@ sg.set(range); upd(); load();
 return { update: upd };
 }
 const powerList = ids => (ids.length > 1 ? ids : ids.length && states.has(ids[0]) ? groupMembers(states.get(ids[0])) : []);
-function openPowerPanel(ids, title) { openPanel(title, body => buildPowerView(body, ids, powerList(ids))); }
+function openPowerPanel(ids, title) {
+let view;
+openPanel(title, body => { view = buildPowerView(body, ids, powerList(ids)); });
+// Werte laufend aktualisieren, auch wenn sich ein Mitglied der Gruppe ändert
+sheetCtx = { id: ids[0], update: () => view.update(), rel: new Set([...ids, ...powerList(ids)]) };
+}
 /* ---------- Kachel-Fabrik ---------- */
 function tileShell(cls, html, btn = true) {
 const el = document.createElement(btn ? "button" : "div");
