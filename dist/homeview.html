@@ -1310,7 +1310,7 @@ setText(el, ".name", nameOf(s));
 const w = pwW(s); lvl = w == null ? "lo" : pwLevel(w);
 el.style.setProperty("--c", PW_COL[lvl]); el.dataset.lvl = lvl;
 const big = el.querySelector(".big"); big.replaceChildren(w == null ? s.state : w >= 1000 ? fmt(w / 1000) : fmt(w, w < 100 ? 1 : 0), h("small", "", w != null && w >= 1000 ? "kW" : "W"));
-setText(el, ".state", s.state === "unavailable" ? "Nicht erreichbar" : w != null && w < 1 ? "Aus" : "Aktuell");
+setText(el, ".state", s.state === "unavailable" ? "Nicht erreichbar" : w != null && w <= 0 ? "Aus" : w != null && w < 5 ? "Standby" : "Aktuell");
 if (Date.now() - loaded > 300000) { loaded = Date.now(); powerSeries([id], 24, 72).then(a => { if (a) { pts = { day: a }; draw(); } }); }
 draw();
 }};
@@ -1344,12 +1344,12 @@ const a = await powerSeries(ids, R.hours, R.n);
 if (my !== token) return;
 if (!a) { chart.textContent = "Für diesen Zeitraum ist kein Verlauf verfügbar."; return; }
 const c = PW_COL[pwLevel(total())], mx = Math.max(...a), mn = Math.min(...a), av = a.reduce((s, x) => s + x, 0) / a.length;
-const top = Math.max(50, Math.ceil(mx * 1.15 / 50) * 50), W = 600, H = 230, L = 38, B = 22, T = 10, X = i => L + i * (W - L - 6) / (a.length - 1), Y = v => T + (H - B - T) * (1 - v / top);
-let g = ""; for (let i = 0; i <= 4; i++) { const v = top * i / 4, y = Y(v); g += `<line x1="${L}" x2="${W - 6}" y1="${y}" y2="${y}" stroke="rgba(255,255,255,.1)"/><text x="${L - 6}" y="${y + 3}" text-anchor="end">${Math.round(v)}</text>`; }
+const niceTop = v => { const e = Math.pow(10, Math.floor(Math.log10(v))), f = v / e; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * e; }, top = Math.max(1, niceTop(mx * 1.15)), W = 600, H = 230, L = 38, B = 22, T = 10, X = i => L + i * (W - L - 6) / (a.length - 1), Y = v => T + (H - B - T) * (1 - v / top);
+let g = ""; for (let i = 0; i <= 4; i++) { const v = top * i / 4, y = Y(v); g += `<line x1="${L}" x2="${W - 6}" y1="${y}" y2="${y}" stroke="rgba(255,255,255,.1)"/><text x="${L - 6}" y="${y + 3}" text-anchor="end">${top < 10 ? fmt(v, 1) : Math.round(v)}</text>`; }
 const line = a.map((v, i) => (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1)).join(" "), mi = a.indexOf(mx), gid = "pc" + Math.random().toString(36).slice(2, 7);
 chart.className = "pv-chart";
-chart.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Verlauf des Verbrauchs"><defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c}" stop-opacity=".5"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></linearGradient></defs>${g}<path d="${line} L${X(a.length - 1)} ${H - B} L${X(0)} ${H - B}Z" fill="url(#${gid})"/><path d="${line}" fill="none" stroke="${c}" stroke-width="2.2" stroke-linejoin="round"/><circle cx="${X(a.length - 1)}" cy="${Y(a[a.length - 1])}" r="4.5" fill="#fff" stroke="${c}" stroke-width="2"/><circle cx="${X(mi)}" cy="${Y(mx)}" r="3" fill="${c}"/><text x="${Math.min(W - 30, Math.max(L + 20, X(mi)))}" y="${Math.max(10, Y(mx) - 7)}" text-anchor="middle" style="fill:#fff">${Math.round(mx)} W</text><text x="${L}" y="${H - 5}">${R.l[0]}</text><text x="${(W + L) / 2}" y="${H - 5}" text-anchor="middle">${R.l[1]}</text><text x="${W - 6}" y="${H - 5}" text-anchor="end">${R.l[2]}</text></svg>`;
-stats.replaceChildren(...[["Spitze", fmtW(mx)], ["Durchschnitt", fmtW(av)], ["Minimum", fmtW(mn)], ["Energie", fmt(av * R.hours / 1000) + " kWh"]].map(([k, v]) => { const d = h("div", "", k); d.append(h("b", "", v)); return d; }));
+chart.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Verlauf des Verbrauchs"><defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c}" stop-opacity=".5"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></linearGradient></defs>${g}<path d="${line} L${X(a.length - 1)} ${H - B} L${X(0)} ${H - B}Z" fill="url(#${gid})"/><path d="${line}" fill="none" stroke="${c}" stroke-width="2.2" stroke-linejoin="round"/><circle cx="${X(a.length - 1)}" cy="${Y(a[a.length - 1])}" r="4.5" fill="#fff" stroke="${c}" stroke-width="2"/><circle cx="${X(mi)}" cy="${Y(mx)}" r="3" fill="${c}"/><text x="${Math.min(W - 30, Math.max(L + 20, X(mi)))}" y="${Math.max(10, Y(mx) - 7)}" text-anchor="middle" style="fill:#fff">${fmtW(mx)}</text><text x="${L}" y="${H - 5}">${R.l[0]}</text><text x="${(W + L) / 2}" y="${H - 5}" text-anchor="middle">${R.l[1]}</text><text x="${W - 6}" y="${H - 5}" text-anchor="end">${R.l[2]}</text></svg>`;
+stats.replaceChildren(...[["Spitze", fmtW(mx)], ["Durchschnitt", fmtW(av)], ["Minimum", fmtW(mn)], ["Energie", fmt(av * R.hours / 1000, av * R.hours / 1000 < 1 ? 3 : 1) + " kWh"]].map(([k, v]) => { const d = h("div", "", k); d.append(h("b", "", v)); return d; }));
 }
 sg.set(range); upd(); load();
 return { update: upd };
