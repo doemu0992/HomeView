@@ -1683,7 +1683,8 @@ function renderChips() {
   if (playing.length) add("media", "media", playing.length === 1 ? (playing[0].attributes.media_title || "Spielt") : `${playing.length} spielen`, { cls: "active" });
   const alarm = dom("alarm_control_panel")[0];
   if (alarm && room === HOME) add("alarm", "shield", ALARM[alarm.state] || alarm.state, { cls: alarm.state === "triggered" ? "warn" : alarm.state.startsWith("armed") ? "active" : "", on: () => openSheet(alarm.entity_id) });
-  const pwIds = powerIds(pool);
+  // Raum: nur Leistungssensoren, die dort als Kachel hinzugefügt und nicht ausgeblendet sind. Zuhause: Summe aller.
+  const pwIds = powerIds(room === HOME ? pool : members.filter(s => !(layout[room]?.hidden || []).includes(s.entity_id)));
   if (pwIds.length) {
     const w = pwIds.reduce((a, i) => a + (pwW(states.get(i)) || 0), 0);
     add("power", "power", fmtW(w), { cls: "pw pw-" + pwLevel(w), on: () => openPowerPanel(pwIds, room === HOME ? "Gesamtverbrauch" : "Verbrauch " + (roomList().find(r => r.id === room)?.name || "")) });
