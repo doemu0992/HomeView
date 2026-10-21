@@ -303,7 +303,7 @@ let sheetCtx = null;                // { id, update(state) }
 
 const domainOf = id => id.split(".")[0];
 /* Der Name entscheidet: „Lüfter“/„Ventilator“ im Namen = Lüfter, auch wenn Home Assistant das Gerät als Licht führt */
-const HV_VERSION = "2026-10-22.5";
+const HV_VERSION = "2026-10-22.6";
 const FAN_RE = /l[uü]e?fter|ventilator/i;
 const isFanLike = s => domainOf(s.entity_id) === "fan" || FAN_RE.test(nameOf(s));
 const nameOf = s => {
@@ -2334,6 +2334,16 @@ function haChrome(on) {
       s.textContent = css;
     };
     walk(doc, apply);
+    /* Rahmen über die ganze HA-Fläche legen, damit auch der freigewordene Platz der Seitenleiste (schwarzer Balken) überdeckt ist */
+    const fe = window.frameElement;
+    if (fe) {
+      if (on) {
+        if (fe.dataset.hvCss === undefined) fe.dataset.hvCss = fe.getAttribute("style") || "";
+        fe.style.cssText = (fe.dataset.hvCss || "") + ";position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;max-width:none!important;max-height:none!important;z-index:2147483000!important;border:0!important";
+      } else if (fe.dataset.hvCss !== undefined) {
+        fe.setAttribute("style", fe.dataset.hvCss); delete fe.dataset.hvCss;
+      }
+    }
     window.dispatchEvent(new Event("resize"));
   } catch {}
 }
