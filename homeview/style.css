@@ -517,3 +517,5 @@ main{flex:1}
 .sc-tag{display:inline-block;font-size:.75rem;padding:.1rem .5rem;border-radius:.6rem;margin-left:.5rem;background:rgba(255,181,77,.25);color:#ffd592;font-weight:500}
 .sheet-card .pick-row .pick-id{max-width:12rem;color:var(--ink-2)}
 @media(max-width:560px){.sc-steps{grid-template-columns:1fr}}
+.br-steps{margin:0;padding-left:1.4rem;display:grid;gap:.6rem;font-size:1.1rem;color:var(--ink-2)}
+.br-steps li::marker{color:#b9acff;font-weight:700}

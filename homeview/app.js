@@ -655,7 +655,7 @@ const DETAIL = {
       if (bad.length) diff.replaceChildren(h("h4", "", "Abweichungen jetzt"), ...bad.map(([e, w]) => { const r = h("div", "vrow"), st = states.get(e);
         r.append(h("span", "vn", nameOf(st)), h("span", "vv", `soll: ${sceneText(w, e)} · ist: ${sceneText(sceneEntry(st), e)}`)); return r; }));
     };
-    const acts = [["Aktivieren", () => { call("turn_on", {}); closeSheet(); }]];
+    const acts = [["Aktivieren", () => { call("turn_on", {}); closeSheet(); }], ["Für Apple Home bereitstellen", () => openSceneBridge([id])]];
     if (editable) {
       let delArmed = false;
       acts.push(["Mit aktuellem Zustand überschreiben", async () => { try {
@@ -1040,6 +1040,64 @@ async function ensureSceneDef(id) {
 function sceneRecheck(entityId) {
   tiles.forEach((t, id) => { if (id.startsWith("scene.") && sceneDefs.get(id)?.entities[entityId] && states.has(id)) t.update(states.get(id)); });
 }
+/* ---------- Szenen für Apple Home bereitstellen: Schalter „Szene …“, der anzeigt, ob die Szene aktiv ist, und sie beim Einschalten startet ---------- */
+const slugOf = t => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "szene";
+function sceneJinja(entities) {
+  const parts = Object.entries(entities).map(([e, w]) => {
+    const conds = [`is_state('${e}', '${w.state}')`];
+    Object.entries(w).forEach(([k, v]) => {
+      if (k === "state" || v == null) return;
+      const tol = SCENE_TOL[k] ?? 1;
+      if (Array.isArray(v)) v.forEach((x, i) => conds.push(`((state_attr('${e}', '${k}') or [-999, -999, -999, -999, -999])[${i}] - ${x})|abs <= ${tol}`));
+      else if (typeof v === "number") conds.push(`((state_attr('${e}', '${k}') | float(-999)) - ${v})|abs <= ${tol}`);
+      else conds.push(`state_attr('${e}', '${k}') == '${v}'`);
+    });
+    return `(states('${e}') in ['unavailable', 'unknown'] or (${conds.join(" and ")}))`;
+  });
+  return parts.join("\n    and ");
+}
+function sceneBridgeYaml(items) {
+  const out = ["template:", "  - switch:"];
+  items.forEach(({ id, name, entities }) => {
+    const uid = "homeview_" + slugOf(id.replace("scene.", ""));
+    out.push(`      - name: "Szene ${name.replace(/"/g, "'")}"`, `        unique_id: ${uid}`);
+    if (entities) {
+      out.push("        state: >-");
+      sceneJinja(entities).split("\n").forEach((l, i) => out.push("          " + (i === 0 ? "{{ " : "") + l.trim().replace(/^and /, "and ")));
+      out[out.length - 1] += " }}";
+    }
+    out.push("        turn_on:", "          - action: scene.turn_on", "            target:", `              entity_id: ${id}`, "        turn_off: []");
+  });
+  return out.join("\n");
+}
+async function openSceneBridge(ids) {
+  openPanel("Für Apple Home bereitstellen", async body => {
+    body.append(h("div", "info", "Lade Inhalt der Szenen …"));
+    await Promise.all(ids.map(ensureSceneDef));
+    const items = ids.filter(i => states.has(i)).map(i => ({ id: i, name: nameOf(states.get(i)), entities: sceneDefs.get(i)?.entities }));
+    body.replaceChildren();
+    if (!items.length) { body.append(h("div", "info", "In diesem Raum gibt es keine Szenen.")); return; }
+    const known = items.filter(x => x.entities), lack = items.filter(x => !x.entities);
+    if (!known.length) { body.append(h("div", "info err", "Der Inhalt der Szenen ist nicht bekannt. Dafür braucht es Administratorrechte, oder die Szene muss in HomeView erfasst worden sein.")); return; }
+    const yaml = sceneBridgeYaml(known);
+    const first = "switch.szene_" + slugOf(known[0].name);
+    const steps = h("ol", "br-steps");
+    [`Kopiere den Text unten in deine configuration.yaml. Gibt es dort schon einen Abschnitt „template:“, hängst du nur die Zeilen ab „- switch:“ an.`,
+     `Lade die Vorlagen neu: Entwicklerwerkzeuge → YAML → „Vorlagen-Entitäten neu laden“ (oder starte Home Assistant neu).`,
+     `Nimm die Schalter in die HomeKit-Bridge auf: Einstellungen → Geräte & Dienste → HomeKit Bridge → Konfigurieren. Wähle die Domain „Schalter“ und deine neuen Schalter, zum Beispiel ${first}. Die Entität heißt wie der Name, bei Umlauten kann sie leicht abweichen.`,
+     `Teste in Apple Home den Schalter in beide Richtungen. Danach kannst du die alte Szene in Apple Home löschen.`].forEach(t => steps.append(h("li", "", t)));
+    body.append(steps);
+    if (lack.length) body.append(h("div", "info err", "Ohne Schalter bleiben: " + lack.map(x => x.name).join(", ") + ". Ihr Inhalt ist nicht bekannt (Administratorrechte nötig)."));
+    const pre = h("pre", "techpre", yaml); body.append(pre);
+    const msg = h("div", "info");
+    actions(body, [["YAML kopieren", async () => {
+      try { await navigator.clipboard.writeText(yaml); msg.textContent = "Kopiert."; }
+      catch { const r = document.createRange(); r.selectNodeContents(pre); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); msg.textContent = "Der Text ist markiert. Kopiere ihn jetzt mit Teilen oder Kopieren."; } }]]);
+    body.append(msg);
+    if (items.some(x => !states.get(x.id).attributes.id)) body.append(h("div", "info", "Hinweis: Szenen, die nur bis zum Neustart gelten, fehlen danach in Home Assistant. Speichere sie als Administrator dauerhaft."));
+  });
+}
+
 const sceneCfgId = id => states.get(id)?.attributes.id;
 async function writeScene(id, patch) {
   const cid = sceneCfgId(id), cur = await apiReq("GET", "config/scene/config/" + cid);
@@ -1541,6 +1599,7 @@ function renderRooms() {
   if (editing) {
     bar.push(mk(chipsOn() ? "Chips: An" : "Chips: Aus", () => { const c = cfgOf(); c.chips = !chipsOn(); saveLayout(); renderChips(); renderRooms(); }, "ghost"));
     bar.push(mk("Szene erfassen", openSceneCapture, "ghost"));
+    bar.push(mk("Szenen für Apple Home", () => openSceneBridge(roomMembers(room).filter(i => i.startsWith("scene."))), "ghost"));
     bar.push(mk("Räume", openRoomManager, "ghost"));
     if (room !== OTHER) bar.push(mk("Geräte", openDevicePicker, "ghost"));
     bar.push(mk("Zurücksetzen", () => { delete layout[room]; saveLayout(); tiles.forEach(t => { t.el.style.gridColumn = t.el.style.gridRow = ""; }); renderGrid(); }, "ghost"));

@@ -111,3 +111,7 @@ Im Anordnen-Modus: „Szene erfassen“. Zuerst merkt sich HomeView den Zustand 
 Eine Szenen-Kachel bleibt weiß („Aktiv“), solange alle Geräte der Szene so stehen, wie die Szene sie speichert. Kleine Rundungsunterschiede bei Helligkeit, Farbe oder Position zählen nicht. Ändert sich ein Gerät, wird die Kachel wieder dunkel. Dafür liest HomeView den Inhalt der Szene aus Home Assistant (Administratorrechte nötig, sonst nur für Szenen, die HomeView in dieser Sitzung angelegt hat).
 
 Nach dem Starten einer Szene prüft HomeView nach fünf Sekunden, ob alle Geräte angekommen sind, und sendet fehlende einmal nach. Im Szenen-Fenster steht unter „Abweichungen jetzt“, welche Geräte von der Szene abweichen. Beim Erfassen kann HomeView vorher Lichter und Steckdosen ausschalten, damit alle Geräte der Apple-Szene erfasst werden.
+
+## Szenen für Apple Home bereitstellen
+
+Im Szenen-Fenster („Für Apple Home bereitstellen“) oder im Anordnen-Modus („Szenen für Apple Home“) erzeugt HomeView den YAML-Text für einen Schalter pro Szene. Der Schalter ist an, solange alle Geräte der Szene so stehen wie gespeichert, und startet beim Einschalten die Szene. Ausschalten tut nichts. Den Text in `configuration.yaml` einfügen, Vorlagen neu laden, die Schalter in der HomeKit-Bridge aufnehmen. In Apple Home ersetzt der Schalter dann die Szene.
