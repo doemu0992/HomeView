@@ -154,6 +154,76 @@ const ICONS = {
   projector: '<rect x="3" y="9" width="18" height="8" rx="2"/><circle cx="15" cy="13" r="2.500"/><path d="M6 20v-3M18 20v-3"/>',
   radio: '<rect x="3" y="8" width="18" height="12" rx="2"/><path d="M3 12h18M7 16h4M16 16h.01M8 8l9-5"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  /* Weitere Symbole (Szenen, Freizeit, Haushalt) */
+  fireplace: '<path d="M3 20h18M5 20V7h14v13M9 20v-4a3 3 0 0 1 6 0v4M12 16c-1-1-1-2 0-3 1 1 1 2 0 3Z"/>',
+  guitar: '<path d="M20 4l-6.500 6.500M18 3l3 3M12 9a3 3 0 0 1 3 3c0 1 2 2 0 5a5 5 0 1 1-8-4c3-2 3-3 5-4Z"/>',
+  cake: '<path d="M4 20h16v-7H4zM6 13V9h12v4M12 9V6M12 3v.01M4 16c2 1.500 3 1.500 4 0s3-1.500 4 0 3 1.500 4 0 3 0 4 0"/>',
+  popcorn: '<path d="M6 10h12l-1.500 11h-9L6 10Z"/><path d="M8 10c-2 0-3-2-2-3.500s3-1 3-2.500c1-2 4-2 5 0 1-.5 3 0 3 2 2 0 3 2 1.500 4"/>',
+  mountain: '<path d="M3 20l6-11 4 6 3-4 5 9H3Z"/>',
+  beach: '<path d="M3 20h18M12 20V9M5 12a7 7 0 0 1 14 0H5Z"/>',
+  rocket: '<path d="M12 3c3 2 5 6 4 12l-4 3-4-3c-1-6 1-10 4-12ZM12 10h.01M8 15l-3 2 1 3 3-2M16 15l3 2-1 3-3-2"/>',
+  bike: '<circle cx="6" cy="16" r="3.500"/><circle cx="18" cy="16" r="3.500"/><path d="M6 16l4-8h5l3 8M10 8H8M13 8l-2 8"/>',
+  run: '<circle cx="14" cy="4.500" r="1.800"/><path d="M11 21l2-6-3-3 2-4 4 2 2 3M8 13l-3 1M12 8l-3 1"/>',
+  yoga: '<circle cx="12" cy="5" r="1.800"/><path d="M12 8v6M5 11l7 1 7-1M12 14l-5 6M12 14l5 6"/>',
+  building: '<path d="M5 21V4h9v17M14 9h5v12M3 21h18M8 8h3M8 12h3M8 16h3"/>',
+  cloud: '<path d="M7 18a4 4 0 0 1-.5-8 5.500 5.500 0 0 1 10.500 1A3.500 3.500 0 0 1 17 18H7Z"/>',
+  rain: '<path d="M7 14a4 4 0 0 1-.5-8 5.500 5.500 0 0 1 10.500 1A3.500 3.500 0 0 1 17 14H7ZM8 17l-1 3M12 17l-1 3M16 17l-1 3"/>',
+  wand: '<path d="M5 19L16 8M14 6l4 4M6 5v3M4.500 6.500h3M19 14v3M17.500 15.500h3"/>',
+  brush: '<path d="M18 3l3 3-9 9-3-3 9-9ZM9 15c-3 0-4 2-4 4 0 1 1 2 2 2 3 0 5-1 5-3"/>',
+  dog: '<path d="M4 10l2-5 4 2h4l4-2 2 5-2 3v4a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3v-4l-2-3ZM9 11h.01M15 11h.01M12 14v2"/>',
+  cat: '<path d="M5 20V8l3 2h8l3-2v12H5ZM9 13h.01M15 13h.01M12 15l-1 1.500M12 15l1 1.500"/>',
+  fish: '<path d="M3 12c3-5 8-6 12-3l6-3v12l-6-3c-4 3-9 2-12-3ZM8 11h.01"/>',
+  bird: '<path d="M20 7c-1 1-2 1-3 1a5 5 0 0 0-9 3c0 5 3 8 8 8 4 0 6-3 6-7V7ZM5 11l-2 2M20 7l1-1"/>',
+  shirt: '<path d="M8 3 3 7l3 3 2-1v12h8V9l2 1 3-3-5-4a4 4 0 0 1-8 0Z"/>',
+  shoe: '<path d="M3 17v-3l5-1 3-4 3 2 6 2v4H3ZM3 19h18"/>',
+  nightstars: '<path d="M20 13.500A8 8 0 1 1 10.500 4a6 6 0 0 0 9.500 9.500Z"/><path d="M16 4v3M14.500 5.500h3"/>',
+  toothbrush: '<path d="M3 17l10-10a3 3 0 0 1 4 4L7 21H3v-4ZM15 9l2 2M9 11l2 2"/>',
+  hairdryer: '<path d="M3 9a5 5 0 0 1 5-5h8a5 5 0 0 1 0 10H8L7 21H4l1-7a5 5 0 0 1-2-5Z"/>',
+  iron: '<path d="M3 17c0-5 3-9 8-9h6a4 4 0 0 1 4 4v5H3ZM3 20h18M10 12h5"/>',
+  mop: '<path d="M12 2v12M7 14h10l2 7H5l2-7Z"/>',
+  trash: '<path d="M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7"/>',
+  burger: '<path d="M4 11a8 6 0 0 1 16 0H4ZM3 14h18M4 17h16v1a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-1Z"/>',
+  pizza: '<path d="M3 6c5-3 13-3 18 0L12 21 3 6ZM9 9h.01M14 10h.01M12 14h.01"/>',
+  icecream: '<path d="M8 11a4 4 0 1 1 8 0H8ZM8 11l4 11 4-11"/>',
+  beer: '<path d="M5 6h10v14H5V6ZM15 8h3a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-3M5 6c0-2 3-3 5-2 2-1 5 0 5 2M9 10v6M12 10v6"/>',
+  cocktail: '<path d="M3 4h18l-9 10L3 4ZM12 14v7M8 21h8M7 7h10"/>',
+  bottle: '<path d="M10 3h4v4l2 3v10a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V10l2-3V3ZM8 14h8"/>',
+  teddy: '<circle cx="12" cy="13" r="6"/><circle cx="6.500" cy="7" r="2"/><circle cx="17.500" cy="7" r="2"/><path d="M10 12h.01M14 12h.01M12 14v1"/>',
+  backpack: '<path d="M7 7a5 5 0 0 1 10 0v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V7ZM9 14h6v4H9zM10 4V3h4v1"/>',
+  books: '<path d="M5 4h4v16H5zM10 4h4v16h-4zM15 6l4-1 2 14-4 1-2-14Z"/>',
+  pencil: '<path d="M4 20l1-4L16 5l3 3L8 19l-4 1ZM14 7l3 3"/>',
+  briefcase: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V4h8v3M3 13h18"/>',
+  clipboard: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 11h6M9 15h6"/>',
+  megaphone: '<path d="M3 10v4h4l8 5V5L7 10H3ZM18 9a4 4 0 0 1 0 6"/>',
+  microphone: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/>',
+  vinyl: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r=".5"/>',
+  keyboard: '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
+  sunset: '<path d="M3 18h18M7 18a5 5 0 0 1 10 0M12 4v5M9.500 7 12 9.500 14.500 7"/>',
+  ball: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
+  homeheart: '<path d="M3 11l9-8 9 8M5 10v10h14V10"/><path d="M12 17s-3-2-3-4a1.700 1.700 0 0 1 3-1 1.700 1.700 0 0 1 3 1c0 2-3 4-3 4Z"/>',
+};
+
+/* Suchbegriffe für die Symbolwahl */
+const ICON_NAMES = {
+  light: "licht lampe glühbirne birne", switch: "schalter ein aus", fan: "lüfter ventilator", lock: "schloss tür schloß", cover: "rollo jalousie rolladen", scene: "szene mond abend gute nacht", media: "musik medien", power: "strom blitz energie",
+  thermo: "thermometer temperatur", drop: "tropfen wasser feuchte", vacuum: "saugroboter staubsauger", door: "tür", motion: "bewegung sensor", gauge: "anzeige tacho", sliders: "regler einstellungen", button: "knopf taster", shield: "schild alarm sicherheit",
+  camera: "kamera", floorlamp: "stehlampe stehleuchte", pendant: "hängelampe pendel", ceiling: "deckenlampe deckenleuchte", spot: "spot strahler", wall: "wandlampe wandleuchte", strip: "led streifen lichtleiste lichtband", lights: "lichterkette girlande", candle: "kerze",
+  lantern: "laterne", chandelier: "kronleuchter", flood: "flutlicht fluter", lamp: "tischlampe lampe", bed: "bett schlafzimmer", sofa: "sofa couch wohnzimmer", tv: "fernseher tv", speaker: "lautsprecher", plug: "stecker steckdose", heater: "heizung heizkörper",
+  snow: "schnee kälte klima", sun: "sonne", window: "fenster", garage: "garage", car: "auto", plant: "pflanze blume", coffee: "kaffee kaffeemaschine", washer: "waschmaschine", fridge: "kühlschrank", bell: "glocke klingel", wifi: "wlan netzwerk", flame: "flamme feuer heizen",
+  home: "haus zuhause", star: "stern favorit", heart: "herz", list: "liste",
+  desklamp: "schreibtischlampe tischlampe", bedside: "nachttischlampe nachttisch bettlampe", filament: "glühfaden glühbirne retro", downlight: "einbaustrahler einbauspot downlight", track: "schienenstrahler schiene", panel: "lichtpanel panel", postlamp: "wegeleuchte poller pfosten garten",
+  groundspot: "bodenstrahler boden", globe: "kugelleuchte kugel", tube: "röhre leuchtstoffröhre neon", nightlight: "nachtlicht", torch: "taschenlampe fackel",
+  leave: "verlassen gehen weggehen haus verlassen", arrive: "ankommen heimkommen nach hause", walker: "person gehen spaziergang", sunrise: "sonnenaufgang morgen guten morgen", sleep: "nacht schlafen gute nacht zzz", film: "film kino", dinner: "essen abendessen besteck dinner",
+  party: "party ballon feier", disco: "disco discokugel tanzen", book: "buch lesen", relax: "entspannen relax lotus ruhe", work: "arbeiten laptop büro", clean: "putzen reinigen glitzer", vacation: "urlaub palme ferien", suitcase: "koffer reise", plane: "flugzeug reise fliegen",
+  gym: "sport hantel fitness training", paw: "haustier pfote tier", headphones: "kopfhörer musik hören", game: "spiel gamepad gaming", leaf: "blatt eco natur sparen", alarm: "wecker alarm", shower: "dusche", bath: "bad badewanne wanne", pot: "kochen topf küche", wine: "wein glas gäste",
+  gift: "geschenk geburtstag", grill: "grill bbq", umbrella: "schirm regen", key: "schlüssel", pool: "pool schwimmen schwimmbad", tree: "baum garten",
+  outlet: "steckdose", powerstrip: "steckdosenleiste mehrfachsteckdose", purifier: "luftreiniger", boiler: "boiler warmwasser", doorbell: "klingel türklingel", mailbox: "briefkasten post", curtain: "vorhang gardine", awning: "markise sonnenschutz", gate: "tor gartentor", router: "router internet",
+  siren: "sirene alarm", smoke: "rauchmelder", leak: "wasserleck wasser alarm", solar: "solar photovoltaik panel", battery: "batterie akku speicher", evcharger: "ladestation e-auto wallbox", dishwasher: "geschirrspüler spülmaschine", oven: "backofen herd", microwave: "mikrowelle", kettle: "wasserkocher",
+  monitor: "bildschirm monitor computer pc", printer: "drucker", phone: "telefon handy", tablet: "tablet ipad", soundbar: "soundbar", projector: "projektor beamer", radio: "radio", clock: "uhr zeit",
+  fireplace: "kamin ofen feuer", guitar: "gitarre musik", cake: "kuchen torte geburtstag", popcorn: "popcorn film kino", mountain: "berg wandern", beach: "strand sommer meer", rocket: "rakete", bike: "fahrrad velo", run: "joggen laufen sport", yoga: "yoga meditation", building: "gebäude büro", cloud: "wolke wetter",
+  rain: "regen wetter", wand: "zauberstab magie", brush: "pinsel malen", dog: "hund", cat: "katze", fish: "fisch aquarium", bird: "vogel", shirt: "hemd kleidung kleider", shoe: "schuh", nightstars: "mond sterne nacht", toothbrush: "zahnbürste zähne", hairdryer: "föhn haare", iron: "bügeleisen bügeln",
+  mop: "wischen mopp putzen", trash: "müll abfall", burger: "burger essen", pizza: "pizza", icecream: "eis", beer: "bier", cocktail: "cocktail drink", bottle: "flasche baby", teddy: "teddy kinder baby spielzeug", backpack: "rucksack schule", books: "bücher lernen", pencil: "stift schreiben",
+  briefcase: "aktentasche arbeit", clipboard: "klemmbrett liste aufgaben", megaphone: "megafon durchsage", microphone: "mikrofon", vinyl: "schallplatte vinyl musik", keyboard: "tastatur", sunset: "sonnenuntergang abend", ball: "ball fußball", homeheart: "haus herz zuhause"
 };
 const icon = k => `<svg class="ic" data-icon="${k}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k]}</svg>`;
 
@@ -162,7 +232,10 @@ const AUTO_ICONS = [[/nachttisch|bett(lampe|licht)?\b/i, "bedside"], [/nachtlich
   [/schiene|track/i, "track"], [/einbau|downlight/i, "downlight"], [/weg(licht|leuchte)|pfosten|poller/i, "postlamp"], [/boden(strahler|spot)/i, "groundspot"], [/steckdose/i, "outlet"], [/leiste/i, "powerstrip"], [/steh/i, "floorlamp"], [/strip|led-?band|lichtband|streifen/i, "strip"], [/h[äa]nge|pendel/i, "pendant"], [/decke|plafon/i, "ceiling"],
   [/spot|strahler/i, "spot"], [/wand(lampe|leuchte|licht)?\b/i, "wall"], [/kerze/i, "candle"], [/laterne|au(ß|ss)en(licht|leuchte)/i, "lantern"],
   [/kronleuchter/i, "chandelier"], [/lichterkette|girlande/i, "lights"], [/flutlicht|fluter/i, "flood"], [/tisch|schreibtisch/i, "lamp"]];
-const SCENE_ICONS = [[/verlass|gehen|weggehen|ausser haus/i, "leave"], [/ankomm|heimkomm|nach hause/i, "arrive"], [/morgen|aufsteh|wach/i, "sunrise"], [/nacht|schlaf/i, "sleep"],
+const SCENE_ICONS = [[/kamin|feuer/i, "fireplace"], [/torte|kuchen/i, "cake"], [/popcorn/i, "popcorn"], [/berg|wander/i, "mountain"], [/strand|sommer/i, "beach"], [/rakete/i, "rocket"], [/velo|fahrrad|bike/i, "bike"],
+  [/jogg|laufen/i, "run"], [/yoga|meditation/i, "yoga"], [/wolke|bew[öo]lkt/i, "cloud"], [/zauber/i, "wand"], [/hund/i, "dog"], [/katze/i, "cat"], [/fisch|aquarium/i, "fish"], [/pizza/i, "pizza"], [/burger/i, "burger"],
+  [/bier/i, "beer"], [/cocktail|drink/i, "cocktail"], [/kinder|baby|spielzimmer/i, "teddy"], [/schule|lernen|hausaufgabe/i, "backpack"], [/telefon|anruf/i, "phone"], [/sonnenuntergang/i, "sunset"], [/plattenspieler|vinyl/i, "vinyl"],
+  [/verlass|gehen|weggehen|ausser haus/i, "leave"], [/ankomm|heimkomm|nach hause/i, "arrive"], [/morgen|aufsteh|wach/i, "sunrise"], [/nacht|schlaf/i, "sleep"],
   [/film|kino|netflix/i, "film"], [/essen|dinner|abendessen|tisch decken/i, "dinner"], [/party|feier/i, "party"], [/disco|tanz/i, "disco"], [/les(en|e)|buch/i, "book"], [/entspann|relax|chill|ruhe/i, "relax"],
   [/arbeit|b[üu]ro|work|homeoffice/i, "work"], [/putz|reinig|aufr[äa]um/i, "clean"], [/urlaub|ferien/i, "vacation"], [/sport|training|fitness/i, "gym"], [/musik|radio|h[öo]ren/i, "headphones"],
   [/spiel|gaming|zocken/i, "game"], [/koch/i, "pot"], [/grill|bbq/i, "grill"], [/dusch/i, "shower"], [/\bbad\b|wanne/i, "bath"], [/garten|terrasse|balkon/i, "tree"], [/g[äa]ste|wein|apero/i, "wine"],
@@ -230,6 +303,7 @@ let sheetCtx = null;                // { id, update(state) }
 
 const domainOf = id => id.split(".")[0];
 /* Der Name entscheidet: „Lüfter“/„Ventilator“ im Namen = Lüfter, auch wenn Home Assistant das Gerät als Licht führt */
+const HV_VERSION = "2026-10-22.3";
 const FAN_RE = /l[uü]e?fter|ventilator/i;
 const isFanLike = s => domainOf(s.entity_id) === "fan" || FAN_RE.test(nameOf(s));
 const nameOf = s => {
@@ -1816,11 +1890,11 @@ function openEntityPanel(id) {
       const iw = h("div", "ctl"), ir = h("div", "ctl-row"); ir.append(h("span", "", "Symbol")); iw.append(ir);
       const origKey = t0.el.querySelector(".ic")._defKey || t0.el.querySelector(".ic").dataset.icon;
       const defKey = (FAN_RE.test(nameOf(s)) && domainOf(id) !== "fan" ? "fan" : autoIconKey(nameOf(s), domainOf(id))) || origKey;
-      const GROUPS = [["Szenen", ["scene", "leave", "arrive", "walker", "sunrise", "sleep", "film", "dinner", "party", "disco", "book", "relax", "work", "clean", "vacation", "suitcase", "plane", "gym", "paw", "headphones", "game", "leaf", "alarm", "shower", "bath", "pot", "wine", "gift", "grill", "umbrella", "key", "pool", "tree", "star", "heart"]],
+      const GROUPS = [["Szenen", ["scene", "leave", "arrive", "walker", "sunrise", "sleep", "film", "dinner", "party", "disco", "book", "relax", "work", "clean", "vacation", "suitcase", "plane", "gym", "paw", "headphones", "game", "leaf", "alarm", "shower", "bath", "pot", "wine", "gift", "grill", "umbrella", "key", "pool", "tree", "star", "heart", "homeheart", "nightstars", "sunset", "fireplace", "cake", "popcorn", "mountain", "beach", "rocket", "bike", "run", "yoga", "guitar", "vinyl", "cloud", "rain", "wand", "brush", "dog", "cat", "fish", "bird", "burger", "pizza", "icecream", "beer", "cocktail", "bottle", "teddy", "backpack", "books", "pencil", "ball"]],
         ["Licht", ["light", "filament", "lamp", "desklamp", "bedside", "nightlight", "floorlamp", "pendant", "ceiling", "downlight", "track", "spot", "wall", "strip", "panel", "tube", "globe", "postlamp", "groundspot", "torch", "lights", "candle", "lantern", "chandelier", "flood", "sun"]],
         ["Schalter und Strom", ["switch", "power", "plug", "outlet", "powerstrip", "battery", "solar", "evcharger", "button", "sliders"]], ["Klima", ["fan", "heater", "snow", "flame", "thermo", "drop", "gauge", "purifier", "boiler"]],
-        ["Wohnen", ["sofa", "bed", "tv", "monitor", "projector", "soundbar", "speaker", "radio", "media", "phone", "tablet", "printer", "router", "clock", "plant"]],
-        ["Küche und Haushalt", ["coffee", "kettle", "oven", "microwave", "dishwasher", "washer", "fridge", "pot", "vacuum"]],
+        ["Wohnen", ["sofa", "bed", "tv", "monitor", "projector", "soundbar", "speaker", "radio", "media", "phone", "tablet", "printer", "keyboard", "microphone", "megaphone", "router", "clock", "plant", "briefcase", "clipboard", "building"]],
+        ["Küche und Haushalt", ["coffee", "kettle", "oven", "microwave", "dishwasher", "washer", "fridge", "pot", "vacuum", "iron", "mop", "trash", "toothbrush", "hairdryer", "shirt", "shoe"]],
         ["Sicherheit und Haus", ["lock", "key", "door", "doorbell", "mailbox", "window", "curtain", "awning", "cover", "gate", "garage", "shield", "siren", "smoke", "leak", "camera", "motion", "bell", "home", "car"]], ["Sonstiges", ["wifi", "list"]]];
       const listed = new Set(GROUPS.flatMap(g => g[1])); const rest = Object.keys(ICONS).filter(k => !listed.has(k));
       if (rest.length) GROUPS.push(["Weitere", rest]);
@@ -1831,16 +1905,22 @@ function openEntityPanel(id) {
         btns.push([k, b]); return b;
       };
       const grid = h("div", "icon-grid"); grid.append(mkBtn(defKey, true));
-      const gw = h("div", "icon-groups"); gw.append(grid);
+      const search = h("input", "textin"); search.placeholder = "Symbol suchen, zum Beispiel Film, Stehlampe, Kamin"; search.setAttribute("aria-label", "Symbol suchen");
+      iw.append(search);
+      const gw = h("div", "icon-groups"); gw.append(grid); const parts = [];
       GROUPS.forEach(([title, keys]) => {
-        const g = h("div", "icon-grid"); keys.filter(k => ICONS[k]).forEach(k => g.append(mkBtn(k, false)));
-        gw.append(h("div", "icon-group-title", title), g);
+        const g = h("div", "icon-grid"), t = h("div", "icon-group-title", title), mine = [];
+        keys.filter(k => ICONS[k]).forEach(k => { const b = mkBtn(k, false); g.append(b); mine.push([k, b]); });
+        gw.append(t, g); parts.push([t, g, mine]);
       });
+      search.addEventListener("input", () => { const q = search.value.trim().toLowerCase(); grid.hidden = !!q;
+        parts.forEach(([t, g, mine]) => { let vis = 0; mine.forEach(([k, b]) => { const hit = !q || (k + " " + (ICON_NAMES[k] || "")).toLowerCase().includes(q); b.hidden = !hit; if (hit) vis++; }); t.hidden = g.hidden = !vis; }); });
       const mark = () => { const cur = (c.ent[id] && c.ent[id].icon) || defKey; btns.forEach(([k, b]) => b.setAttribute("aria-pressed", String(k === cur))); };
       mark(); iw.append(gw); body.append(iw);
       const an = seg(body, { label: "Animation", options: [[true, "An"], [false, "Aus"]], on: v => { const o = get(); v ? delete o.anim : (o.anim = false); refresh(); an.set(v); } });
       an.set(!(c.ent[id] && c.ent[id].anim === false));
       body.append(h("div", "info", "Animierte Symbole bewegen sich, solange das Gerät an ist (zum Beispiel dreht sich der Ventilator)."));
+      body.append(h("div", "info", `HomeView ${HV_VERSION} · ${Object.keys(ICONS).length} Symbole`));
     }
     const rs = h("button", "", "Auf Standard zurücksetzen"); rs.type = "button";
     rs.addEventListener("click", () => { delete c.ent[id]; refresh(); openEntityPanel(id); });

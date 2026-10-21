@@ -521,3 +521,4 @@ main{flex:1}
 .br-steps li::marker{color:#b9acff;font-weight:700}
 .sheet-card .actions button.vgo{background:#8f7cff;color:#120c2a}
 .sheet-card .actions button.vgo:disabled{opacity:.45}
+.icon-grid[hidden],.icon-group-title[hidden],.icon-grid button[hidden]{display:none}
