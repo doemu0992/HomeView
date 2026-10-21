@@ -60,7 +60,7 @@ HomeView passt Schrift und Abstände der Bildschirmhöhe an, sodass immer mindes
 
 ## Kiosk-Modus
 
-Der Knopf „Kiosk“ oben rechts startet den Vollbildmodus und blendet Bearbeiten-Elemente aus. Beenden: Uhrzeit 2 Sekunden gedrückt halten (oder Esc). Mit `&kiosk=1` am Ende der Adresse startet die Anzeige direkt im Kiosk-Modus (ohne Vollbild, das braucht einen Tipp).
+Der Knopf „Kiosk“ oben rechts startet den Vollbildmodus und blendet Bearbeiten-Elemente aus. Beenden: Uhrzeit 2 Sekunden gedrückt halten (oder Esc). Läuft HomeView im Dashboard von Home Assistant (iframe, `/local/…`), blendet der Knopf zusätzlich dessen Seitenleiste und Kopfzeile aus. Dafür ist kein Browser Mod nötig. Mit `#kiosk=1` am Ende der iframe-Adresse (z. B. `/local/homeview.html?v=5#kiosk=1`) startet die Anzeige direkt im Kiosk-Modus (ohne Vollbild, das braucht einen Tipp).
 
 ## Animierte Symbole
 

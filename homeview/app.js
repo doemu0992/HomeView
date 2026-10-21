@@ -303,7 +303,7 @@ let sheetCtx = null;                // { id, update(state) }
 
 const domainOf = id => id.split(".")[0];
 /* Der Name entscheidet: „Lüfter“/„Ventilator“ im Namen = Lüfter, auch wenn Home Assistant das Gerät als Licht führt */
-const HV_VERSION = "2026-10-22.3";
+const HV_VERSION = "2026-10-22.4";
 const FAN_RE = /l[uü]e?fter|ventilator/i;
 const isFanLike = s => domainOf(s.entity_id) === "fan" || FAN_RE.test(nameOf(s));
 const nameOf = s => {
@@ -2311,9 +2311,29 @@ function toast(msg, ms = 5000) {
   const t = $("toast"); t.textContent = msg; t.hidden = false;
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, ms);
 }
+/* Läuft HomeView im Rahmen von Home Assistant (gleiche Herkunft), blendet der Kiosk-Modus dessen Seitenleiste und Kopfzeile selbst aus. */
+function haChrome(on) {
+  try {
+    if (window.parent === window) return;
+    const doc = window.parent.document, ID = "hv-kiosk-style";
+    const style = (root, css) => {
+      if (!root) return;
+      let s = root.querySelector("#" + ID);
+      if (!on) { if (s) s.remove(); return; }
+      if (!s) { s = doc.createElement("style"); s.id = ID; root.appendChild(s); }
+      s.textContent = css;
+    };
+    const main = doc.querySelector("home-assistant")?.shadowRoot?.querySelector("home-assistant-main")?.shadowRoot;
+    style(main, ":host{--mdc-drawer-width:0px!important}ha-sidebar{display:none!important}ha-drawer{--mdc-drawer-width:0px!important}");
+    const root = main?.querySelector("ha-panel-lovelace")?.shadowRoot?.querySelector("hui-root")?.shadowRoot;
+    style(root, ":host{--header-height:0px!important}.header,.toolbar{display:none!important}#view{padding-top:0!important;min-height:100vh!important}");
+    window.dispatchEvent(new Event("resize"));
+  } catch {}
+}
 async function setKiosk(on, { fullscreen = true } = {}) {
   if (on === kiosk) return;
   kiosk = on; $("app").classList.toggle("kiosk", on);
+  haChrome(on);
   $("kioskBtn").setAttribute("aria-label", on ? "Kiosk-Modus beenden" : "Kiosk-Modus starten");
   if (on) {
     if (editing) setEditing(false);
