@@ -853,7 +853,7 @@ const tiles = new Map();            // entity_id -> { el, update(state) }
 let sheetCtx = null;                // { id, update(state) }
 const domainOf = id => id.split(".")[0];
 /* Der Name entscheidet: „Lüfter“/„Ventilator“ im Namen = Lüfter, auch wenn Home Assistant das Gerät als Licht führt */
-const HV_VERSION = "2026-10-22.6";
+const HV_VERSION = "2026-10-22.7";
 const FAN_RE = /l[uü]e?fter|ventilator/i;
 const isFanLike = s => domainOf(s.entity_id) === "fan" || FAN_RE.test(nameOf(s));
 const nameOf = s => {
@@ -2837,19 +2837,28 @@ if (on) {
 if (editing) setEditing(false);
 closeSheet();
 let fsOk = false;
-if (fullscreen && document.documentElement.requestFullscreen) {
-try { await document.documentElement.requestFullscreen(); fsOk = true; fsActive = true; } catch {}
+if (fullscreen) {
+/* erst der eigene Rahmen, sonst die ganze Home-Assistant-Seite (gleiche Herkunft); es zählt nur, was der Browser wirklich übernimmt */
+const tries = [() => document.documentElement.requestFullscreen(), () => window.parent.document.documentElement.requestFullscreen()];
+for (const t of tries) {
+try { await t(); } catch {}
+let pf = false; try { pf = !!window.parent.document.fullscreenElement; } catch {}
+if (document.fullscreenElement || pf) { fsOk = true; fsActive = true; break; }
+}
 }
 toast(fsOk || !fullscreen ? "Kiosk aktiv · zum Beenden die Uhrzeit 2 Sekunden gedrückt halten"
 : "Kiosk aktiv, aber der Browser erlaubt hier kein Vollbild. Zum Beenden die Uhrzeit 2 Sekunden gedrückt halten.", 7000);
 } else {
 fsActive = false;
 if (document.fullscreenElement) { try { await document.exitFullscreen(); } catch {} }
+try { if (window.parent.document.fullscreenElement) await window.parent.document.exitFullscreen(); } catch {}
 $("toast").hidden = true;
 }
 }
 $("kioskBtn").addEventListener("click", () => setKiosk(true));
-document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && kiosk && fsActive) setKiosk(false); });
+const fsOff = () => { let pf = false; try { pf = !!window.parent.document.fullscreenElement; } catch {} if (!document.fullscreenElement && !pf && kiosk && fsActive) setKiosk(false); };
+document.addEventListener("fullscreenchange", fsOff);
+try { window.parent.document.addEventListener("fullscreenchange", fsOff); } catch {}
 document.addEventListener("visibilitychange", () => { if (!document.hidden && !$("app").hidden) { try { navigator.wakeLock?.request("screen").catch(() => {}); } catch {} } });
 (function exitGesture() {
 let t; const el = $("time");
