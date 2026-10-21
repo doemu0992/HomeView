@@ -303,7 +303,7 @@ let sheetCtx = null;                // { id, update(state) }
 
 const domainOf = id => id.split(".")[0];
 /* Der Name entscheidet: „Lüfter“/„Ventilator“ im Namen = Lüfter, auch wenn Home Assistant das Gerät als Licht führt */
-const HV_VERSION = "2026-10-22.4";
+const HV_VERSION = "2026-10-22.5";
 const FAN_RE = /l[uü]e?fter|ventilator/i;
 const isFanLike = s => domainOf(s.entity_id) === "fan" || FAN_RE.test(nameOf(s));
 const nameOf = s => {
@@ -2316,17 +2316,24 @@ function haChrome(on) {
   try {
     if (window.parent === window) return;
     const doc = window.parent.document, ID = "hv-kiosk-style";
-    const style = (root, css) => {
-      if (!root) return;
-      let s = root.querySelector("#" + ID);
+    const rules = {
+      "home-assistant-main": ":host{--mdc-drawer-width:0px!important}ha-sidebar{display:none!important}ha-drawer{--mdc-drawer-width:0px!important}",
+      "ha-drawer": ":host{--mdc-drawer-width:0px!important}.mdc-drawer,.mdc-drawer-scrim,[slot=navigationIcon]{display:none!important}",
+      "hui-root": ":host{--header-height:0px!important}.header,.toolbar,ha-top-app-bar-fixed{display:none!important}#view{padding-top:0!important;min-height:100vh!important}"
+    };
+    const walk = (root, fn) => {
+      for (const el of root.querySelectorAll("*")) {
+        if (el.shadowRoot) { fn(el); walk(el.shadowRoot, fn); }
+      }
+    };
+    const apply = el => {
+      const css = rules[el.localName]; if (!css) return;
+      let s = el.shadowRoot.querySelector("#" + ID);
       if (!on) { if (s) s.remove(); return; }
-      if (!s) { s = doc.createElement("style"); s.id = ID; root.appendChild(s); }
+      if (!s) { s = doc.createElement("style"); s.id = ID; el.shadowRoot.appendChild(s); }
       s.textContent = css;
     };
-    const main = doc.querySelector("home-assistant")?.shadowRoot?.querySelector("home-assistant-main")?.shadowRoot;
-    style(main, ":host{--mdc-drawer-width:0px!important}ha-sidebar{display:none!important}ha-drawer{--mdc-drawer-width:0px!important}");
-    const root = main?.querySelector("ha-panel-lovelace")?.shadowRoot?.querySelector("hui-root")?.shadowRoot;
-    style(root, ":host{--header-height:0px!important}.header,.toolbar{display:none!important}#view{padding-top:0!important;min-height:100vh!important}");
+    walk(doc, apply);
     window.dispatchEvent(new Event("resize"));
   } catch {}
 }
