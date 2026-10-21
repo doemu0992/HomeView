@@ -104,9 +104,9 @@ Sensoren mit der Geräteklasse „Leistung“ erscheinen als Chip und als Kachel
 
 Räume, Reihenfolge, Größen, Namen, Symbole und Chips werden im gemeinsamen Speicher von Home Assistant abgelegt und gelten für alle Benutzer. Ändern dürfen sie nur Administratoren. Ein Benutzer ohne Administratorrechte sieht die gemeinsame Ansicht, seine Änderungen gelten nur für ihn. Beim ersten Start als Administrator wird das bisherige persönliche Layout für alle übernommen. Andere Geräte übernehmen Änderungen innerhalb einer Minute.
 
-## Szenen aus Apple Home übernehmen
+## Szenen anlegen
 
-1. Szene in Apple Home einstellen.
+1. Lichter und Geräte so einstellen, wie die Szene sein soll (zum Beispiel mit HomeView selbst oder, falls vorhanden, auch in Apple Home).
 2. In HomeView unten auf „+ Szene“ tippen. HomeView hat die letzten Änderungen der Geräte (Lichter, Steckdosen, Schlösser, Rollos, Ventilatoren, Thermostate) der letzten drei Minuten mitgelesen und wählt sie vor.
 3. Namen eingeben, „Szene speichern“. Die Szene wird als echte Home-Assistant-Szene angelegt und erscheint als Kachel im aktuellen Raum.
 

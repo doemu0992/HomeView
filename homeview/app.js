@@ -960,8 +960,8 @@ function openSceneCapture() {
   const sel = new Set(changed.map(s => s.entity_id));
   openPanel("Szene speichern", body => {
     body.append(h("div", "info", changed.length
-      ? "Stelle die Szene in Apple Home ein und tippe hier auf „Szene speichern“. Diese Geräte haben sich gerade geändert:"
-      : "In den letzten Minuten hat sich nichts geändert. Stelle die Szene in Apple Home ein und öffne dieses Fenster noch einmal. Oder wähle unten Geräte von Hand."));
+      ? "Stelle die Geräte so ein, wie die Szene sein soll, und speichere sie hier. Diese Geräte haben sich gerade geändert:"
+      : "In den letzten Minuten hat sich nichts geändert. Stelle Lichter und Geräte so ein, wie die Szene sein soll, und öffne dieses Fenster noch einmal. Oder wähle unten Geräte von Hand."));
     const inp = h("input", "textin"); inp.placeholder = "Name der Szene, zum Beispiel Abend"; inp.setAttribute("aria-label", "Name der Szene"); body.append(inp);
     const list = h("div", "picklist"); body.append(list);
     let more = !changed.length; const moreBtn = h("button", "ghostbtn"); moreBtn.type = "button";
