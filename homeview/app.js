@@ -644,10 +644,17 @@ const DETAIL = {
     const grp = vGroup(body, "Inhalt"), msg = h("div", "info err");
     (async () => {
       let data = null; if (editable) { try { data = await apiReq("GET", "config/scene/config/" + cid); } catch {} }
+      if (!data && sceneDefs.get(id)) data = { entities: sceneDefs.get(id).entities };
       const ents = data && data.entities ? Object.entries(data.entities) : (s0.attributes.entity_id || []).map(e => [e, null]);
       grp.replaceChildren(h("h4", "", "Inhalt"), ...ents.map(([e, v]) => { const r = h("div", "vrow"), st = stateOf(e); r.append(h("span", "vn", st ? nameOf(st) : e), h("span", "vv", v ? sceneText(v, e) : "")); return r; }));
       if (!ents.length) grp.append(h("div", "vrow", "Keine Geräte hinterlegt."));
     })();
+    const diff = vGroup(body, "Abweichungen jetzt"); diff.hidden = true;
+    const upd = () => {
+      const bad = sceneActive(id) ? [] : sceneMismatches(id); diff.hidden = !bad.length;
+      if (bad.length) diff.replaceChildren(h("h4", "", "Abweichungen jetzt"), ...bad.map(([e, w]) => { const r = h("div", "vrow"), st = states.get(e);
+        r.append(h("span", "vn", nameOf(st)), h("span", "vv", `soll: ${sceneText(w, e)} · ist: ${sceneText(sceneEntry(st), e)}`)); return r; }));
+    };
     const acts = [["Aktivieren", () => { call("turn_on", {}); closeSheet(); }]];
     if (editable) {
       let delArmed = false;
@@ -663,7 +670,8 @@ const DETAIL = {
     }
     actions(body, acts); body.append(msg);
     if (!editable) body.append(h("div", "info", "Diese Szene lässt sich hier nicht ändern. Sie stammt nicht aus der Home-Assistant-Oberfläche."));
-    const upd = () => {}; upd.ownSub = false; return upd;
+    upd.rel = new Set(Object.keys(sceneDefs.get(id)?.entities || {})); upd(); setTimeout(upd, 800);
+    return upd;
   },
 
   alarm_control_panel(id, body, call) {
@@ -951,6 +959,10 @@ function openSceneCapture() {
         body.append(h("div", "info", "HomeView merkt sich den Zustand aller Geräte im Raum. Danach stellst du in Apple Home die Szene ein, die du übernehmen willst."));
         actions(body, [["Zustand merken", () => { before = new Map(sceneCandidates(rid).map(s => [s.entity_id, JSON.stringify(sceneEntry(s))])); step = 2; render(); }]]);
         body.lastChild.firstChild.classList.add("vgo");
+        body.append(h("div", "info", "Tipp: Schaltest du vorher Lichter und Steckdosen aus, werden alle Geräte der Szene erfasst und nicht nur die, die sich ändern."));
+        actions(body, [["Lichter und Steckdosen ausschalten, dann merken", () => {
+          sceneCandidates(rid).filter(x => ["light", "switch", "input_boolean"].includes(domainOf(x.entity_id)) && x.state === "on").forEach(x => conn.call(domainOf(x.entity_id), "turn_off", {}, x.entity_id));
+          setTimeout(() => { before = new Map(sceneCandidates(rid).map(x => [x.entity_id, JSON.stringify(sceneEntry(x))])); step = 2; render(); }, 2000); }]]);
       } else if (step === 2) {
         body.append(h("div", "info", `Gemerkt: ${before.size} Geräte. Stelle jetzt in Apple Home die Szene ein und komm zurück.`));
         const err = h("div", "info err");
@@ -1013,6 +1025,12 @@ function sceneActive(id) {
     if (!sceneMatches(cur, want)) return false; n++;
   }
   return n > 0;
+}
+const sceneMismatches = id => Object.entries(sceneDefs.get(id)?.entities || {}).filter(([e, w]) => { const c = states.get(e); return c && c.state !== "unavailable" && !sceneMatches(c, w); });
+/* Nach dem Starten einer Szene prüfen, ob alle Geräte angekommen sind. Fehlende werden einmal nachgesendet. */
+function sceneVerify(id) {
+  const bad = sceneMismatches(id);
+  if (bad.length) conn.call("scene", "apply", { entities: Object.fromEntries(bad) });
 }
 async function ensureSceneDef(id) {
   if (sceneDefs.has(id) || !apiReq) return;
@@ -1122,6 +1140,7 @@ const BUILDERS = {
       conn.call("scene", "turn_on", {}, id);
       el.classList.add("on"); el.setAttribute("aria-pressed", "true"); setText(el, ".state", "Aktiv");
       clearTimeout(t); t = setTimeout(() => tiles.get(id)?.update(states.get(id)), 1600);
+      setTimeout(() => sceneVerify(id), 5000);
     });
     return { el, update(s) {
       ensureSceneDef(id);
