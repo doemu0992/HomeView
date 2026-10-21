@@ -956,12 +956,18 @@ function openSceneCapture() {
   const all = sceneCandidates(HOME).concat([]);
   const recent = s => Date.now() - (lastChange.get(s.entity_id) || 0) < WINDOW;
   const inRoom = new Set(rid === HOME ? all.map(s => s.entity_id) : roomMembers(rid));
-  const changed = all.filter(recent), others = all.filter(s => !recent(s) && inRoom.has(s.entity_id));
+  // Vorgewählt: Geräte, die gerade eingeschaltet sind (in diesem Raum), und Geräte, die du in den letzten Minuten geändert hast
+  const isOn = s => { const d = domainOf(s.entity_id), a = s.attributes;
+    if (d === "cover") return s.state === "open" || s.state === "opening" || a.current_position > 0;
+    if (d === "climate") return s.state !== "off";
+    if (d === "lock") return false;
+    return s.state === "on"; };
+  const changed = all.filter(s => recent(s) || (inRoom.has(s.entity_id) && isOn(s))), others = all.filter(s => !changed.includes(s) && inRoom.has(s.entity_id));
   const sel = new Set(changed.map(s => s.entity_id));
   openPanel("Szene speichern", body => {
     body.append(h("div", "info", changed.length
-      ? "Stelle die Geräte so ein, wie die Szene sein soll, und speichere sie hier. Diese Geräte haben sich gerade geändert:"
-      : "In den letzten Minuten hat sich nichts geändert. Stelle Lichter und Geräte so ein, wie die Szene sein soll, und öffne dieses Fenster noch einmal. Oder wähle unten Geräte von Hand."));
+      ? "HomeView speichert den aktuellen Zustand dieser Geräte: alles, was gerade an ist, und was du zuletzt geändert hast. Wähle ab, was nicht dazugehört."
+      : "Gerade ist nichts eingeschaltet und nichts geändert worden. Stelle Lichter und Geräte so ein, wie die Szene sein soll, und öffne dieses Fenster noch einmal. Oder wähle unten Geräte von Hand."));
     const inp = h("input", "textin"); inp.placeholder = "Name der Szene, zum Beispiel Abend"; inp.setAttribute("aria-label", "Name der Szene"); body.append(inp);
     const list = h("div", "picklist"); body.append(list);
     let more = !changed.length; const moreBtn = h("button", "ghostbtn"); moreBtn.type = "button";
