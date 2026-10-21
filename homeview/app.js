@@ -164,7 +164,8 @@ function pushState(s) {
   if (old && SCENE_DOMAINS.includes(domainOf(s.entity_id)) && JSON.stringify(sceneEntry(old)) !== JSON.stringify(sceneEntry(s))) lastChange.set(s.entity_id, Date.now());
   states.set(s.entity_id, s);
   tiles.get(s.entity_id)?.update(s);
-  if (!s.entity_id.startsWith("scene.")) sceneRecheck(s.entity_id);
+  if (s.entity_id.startsWith("scene.")) tiles.forEach((t, id) => { if (id.startsWith("scene.") && id !== s.entity_id && states.has(id)) t.update(states.get(id)); });
+  else sceneRecheck(s.entity_id);
   scheduleChips();
   if (sheetCtx && sheetCtx.id === s.entity_id) sheetCtx.update(s);
   notifyRelated(s.entity_id);
@@ -1009,9 +1010,12 @@ function sceneHelper(id) {
   helperCache.set(id, { t: Date.now(), id: sw ? sw.entity_id : null });
   return sw;
 }
+const sceneTime = id => { const t = Date.parse(states.get(id)?.state); return isNaN(t) ? 0 : t; };
 function sceneActive(id) {
   const hp = sceneHelper(id); if (hp && hp.state !== "unavailable") return hp.state === "on";
   const def = sceneDefs.get(id); if (!def) return false;
+  const mine = sceneTime(id);
+  for (const [k, v] of states) if (k !== id && k.startsWith("scene.") && sceneTime(k) > mine) return false;
   let n = 0;
   for (const [e, want] of Object.entries(def.entities)) {
     const cur = states.get(e); if (!cur || cur.state === "unavailable") continue;
@@ -1054,15 +1058,18 @@ function sceneJinja(entities) {
   });
   return parts.join("\n    and ");
 }
+/* Aktiv = Geräte stimmen UND keine andere Szene wurde später gestartet (der Zustand einer Szene ist der Zeitpunkt ihres letzten Starts) */
+function sceneStateTemplate(id, entities) {
+  const others = `([0] + (states.scene | rejectattr('entity_id', 'eq', '${id}') | map(attribute='state') | map('as_timestamp', 0) | list)) | max`;
+  return `(${sceneJinja(entities).replace(/\n    and /g, " and ")}) and ${others} <= as_timestamp(states('${id}'), 0)`;
+}
 function sceneBridgeYaml(items) {
   const out = ["template:", "  - switch:"];
   items.forEach(({ id, name, entities }) => {
     const uid = "homeview_" + slugOf(id.replace("scene.", ""));
     out.push(`      - name: "Szene ${name.replace(/"/g, "'")}"`, `        unique_id: ${uid}`);
     if (entities) {
-      out.push("        state: >-");
-      sceneJinja(entities).split("\n").forEach((l, i) => out.push("          " + (i === 0 ? "{{ " : "") + l.trim().replace(/^and /, "and ")));
-      out[out.length - 1] += " }}";
+      out.push("        state: >-", "          {{ " + sceneStateTemplate(id, entities) + " }}");
     }
     out.push("        turn_on:", "          - action: scene.turn_on", "            target:", `              entity_id: ${id}`, "        turn_off: []");
   });
@@ -1125,7 +1132,7 @@ async function provisionSceneSwitch(id) {
   }
   await runFlow("config/config_entries/flow", { handler: "template", show_advanced_options: false }, {
     menu: "switch",
-    form: () => ({ name: swName, value_template: "{{ " + sceneJinja(def.entities).replace(/\n    and /g, " and ") + " }}", turn_on: [{ action: "scene.turn_on", target: { entity_id: id } }] })
+    form: () => ({ name: swName, value_template: "{{ " + sceneStateTemplate(id, def.entities) + " }}", turn_on: [{ action: "scene.turn_on", target: { entity_id: id } }] })
   });
   const sw = await waitFor(findSw, 8000);
   if (!sw) throw new Error("Der Schalter erscheint nicht in Home Assistant");
