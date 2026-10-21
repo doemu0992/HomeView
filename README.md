@@ -103,3 +103,7 @@ Sensoren mit der Geräteklasse „Leistung“ erscheinen als Chip und als Kachel
 ## Gemeinsame Ansicht
 
 Räume, Reihenfolge, Größen, Namen, Symbole und Chips werden im gemeinsamen Speicher von Home Assistant abgelegt und gelten für alle Benutzer. Ändern dürfen sie nur Administratoren. Ein Benutzer ohne Administratorrechte sieht die gemeinsame Ansicht, seine Änderungen gelten nur für ihn. Beim ersten Start als Administrator wird das bisherige persönliche Layout für alle übernommen. Andere Geräte übernehmen Änderungen innerhalb einer Minute.
+
+## Szenen aus Apple Home übernehmen
+
+Im Anordnen-Modus: „Szene erfassen“. Zuerst merkt sich HomeView den Zustand der Geräte im gewählten Raum (oder im ganzen Haus). Dann stellst du in Apple Home die Szene ein. HomeView sucht die Unterschiede, wählt die geänderten Geräte vor (Lichter, Steckdosen, Schlösser, Rollos, Ventilatoren, Thermostate) und legt nach dem Speichern eine echte Home-Assistant-Szene an. Sie erscheint als Kachel im Raum. Lang drücken auf die Kachel zeigt den Inhalt und erlaubt Überschreiben, Umbenennen und Löschen. Dauerhaft speichern können nur Administratoren. Ohne diese Rechte gilt die Szene bis zum nächsten Neustart von Home Assistant. HomeView fragt beim Start einer Szene nie nach, auch nicht, wenn sie ein Schloss entriegelt.

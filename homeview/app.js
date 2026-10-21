@@ -638,6 +638,33 @@ const DETAIL = {
     return upd;
   },
 
+  scene(id, body, call) {
+    const s0 = states.get(id), cid = s0.attributes.id, editable = !!(apiReq && cid);
+    const grp = vGroup(body, "Inhalt"), msg = h("div", "info err");
+    (async () => {
+      let data = null; if (editable) { try { data = await apiReq("GET", "config/scene/config/" + cid); } catch {} }
+      const ents = data && data.entities ? Object.entries(data.entities) : (s0.attributes.entity_id || []).map(e => [e, null]);
+      grp.replaceChildren(h("h4", "", "Inhalt"), ...ents.map(([e, v]) => { const r = h("div", "vrow"), st = stateOf(e); r.append(h("span", "vn", st ? nameOf(st) : e), h("span", "vv", v ? sceneText(v, e) : "")); return r; }));
+      if (!ents.length) grp.append(h("div", "vrow", "Keine Geräte hinterlegt."));
+    })();
+    const acts = [["Aktivieren", () => { call("turn_on", {}); closeSheet(); }]];
+    if (editable) {
+      let delArmed = false;
+      acts.push(["Mit aktuellem Zustand überschreiben", async () => { try {
+        await writeScene(id, cur => ({ entities: Object.fromEntries(Object.keys(cur.entities || {}).filter(e => states.has(e)).map(e => [e, sceneEntry(states.get(e))])) }));
+        msg.textContent = ""; toast("Szene mit dem aktuellen Zustand überschrieben"); } catch { msg.textContent = "Das Überschreiben ist nicht möglich. Dafür braucht es Administratorrechte."; } }],
+      ["Umbenennen", () => { const row = h("div", "rm-add"), inp = h("input", "textin"); inp.value = nameOf(s0); inp.setAttribute("aria-label", "Neuer Name");
+        const ok = h("button", "", "Speichern"); ok.type = "button";
+        ok.addEventListener("click", async () => { const n = inp.value.trim(); if (!n) return; try { await writeScene(id, () => ({ name: n })); closeSheet(); toast("Szene umbenannt"); } catch { msg.textContent = "Umbenennen ist nicht möglich."; } });
+        row.append(inp, ok); body.insertBefore(row, msg); inp.focus(); }],
+      ["Löschen", async function (ev) { const b = ev.currentTarget; if (!delArmed) { delArmed = true; b.textContent = "Nochmal tippen zum Löschen"; return; }
+        try { await apiReq("DELETE", "config/scene/config/" + cid); await conn.call("scene", "reload", {}); closeSheet(); toast("Szene gelöscht"); } catch { msg.textContent = "Löschen ist nicht möglich."; } }]);
+    }
+    actions(body, acts); body.append(msg);
+    if (!editable) body.append(h("div", "info", "Diese Szene lässt sich hier nicht ändern. Sie stammt nicht aus der Home-Assistant-Oberfläche."));
+    const upd = () => {}; upd.ownSub = false; return upd;
+  },
+
   alarm_control_panel(id, body, call) {
     const a0 = states.get(id).attributes;
     const code = a0.code_format != null;
@@ -855,6 +882,118 @@ function openPowerPanel(ids, title) {
   openPanel(title, body => { view = buildPowerView(body, ids, powerList(ids)); });
   // Werte laufend aktualisieren, auch wenn sich ein Mitglied der Gruppe ändert
   sheetCtx = { id: ids[0], update: () => view.update(), rel: new Set([...ids, ...powerList(ids)]) };
+}
+
+/* ---------- Szenen: Zustand erfassen und als Home-Assistant-Szene speichern ---------- */
+let apiReq = null;                  // REST-Anfrage an Home Assistant: (Methode, Pfad, Daten) => Promise, im Demo-Modus null
+const SCENE_DOMAINS = ["light", "switch", "input_boolean", "lock", "cover", "fan", "climate", "humidifier"];
+const SCENE_GROUPS = [["Lichter", ["light"]], ["Steckdosen und Schalter", ["switch", "input_boolean"]], ["Schlösser und Rollos", ["lock", "cover"]], ["Klima", ["fan", "climate", "humidifier"]]];
+const COLOR_ATTR = { color_temp: "color_temp_kelvin", hs: "hs_color", xy: "xy_color", rgb: "rgb_color", rgbw: "rgbw_color", rgbww: "rgbww_color" };
+const pick = (a, keys) => Object.fromEntries(keys.filter(k => a[k] != null).map(k => [k, a[k]]));
+function sceneEntry(s) {
+  const d = domainOf(s.entity_id), a = s.attributes; let st = s.state, at = {};
+  if (d === "light" && st === "on") { at = pick(a, ["brightness"]); const k = COLOR_ATTR[a.color_mode]; if (k && a[k] != null) at[k] = a[k]; }
+  else if (d === "cover") { st = st === "opening" ? "open" : st === "closing" ? "closed" : st; at = pick(a, ["current_position", "current_tilt_position"]); }
+  else if (d === "fan" && st === "on") at = pick(a, ["percentage", "preset_mode", "oscillating", "direction"]);
+  else if (d === "climate") at = pick(a, ["temperature", "target_temp_high", "target_temp_low", "preset_mode", "fan_mode", "swing_mode"]);
+  else if (d === "humidifier" && st === "on") at = pick(a, ["humidity", "mode"]);
+  return { state: st, ...at };
+}
+function sceneText(e, id) {
+  const d = domainOf(id), on = e.state === "on";
+  if (d === "light") return on ? "An" + (e.brightness != null ? " · " + briPct(e.brightness) + " %" : "") + (e.color_temp_kelvin ? ", " + e.color_temp_kelvin + " K" : e.hs_color || e.xy_color || e.rgb_color || e.rgbw_color || e.rgbww_color ? ", Farbe" : "") : "Aus";
+  if (d === "lock") return e.state === "locked" ? "Verriegelt" : "Entriegelt";
+  if (d === "cover") return (e.state === "open" ? "Offen" : "Geschlossen") + (e.current_position != null ? " · " + e.current_position + " %" : "");
+  if (d === "fan" || d === "humidifier") return on ? "An" + (e.percentage != null ? " · " + e.percentage + " %" : e.humidity != null ? " · " + e.humidity + " %" : "") : "Aus";
+  if (d === "climate") return label(HVAC_MODE, e.state) + (e.temperature != null ? " · " + fmt(e.temperature) + "°" : "");
+  return on ? "An" : e.state === "off" ? "Aus" : e.state;
+}
+const waitFor = async (fn, ms = 6000) => { for (let t = 0; t < ms; t += 250) { const v = fn(); if (v) return v; await new Promise(r => setTimeout(r, 250)); } return null; };
+const sceneCandidates = rid => (rid === HOME ? [...states.values()] : roomMembers(rid).map(i => states.get(i)).filter(Boolean))
+  .filter(s => SCENE_DOMAINS.includes(domainOf(s.entity_id)) && s.state !== "unavailable");
+
+async function createScene(name, ids, rid) {
+  const entities = Object.fromEntries(ids.map(i => [i, sceneEntry(states.get(i))]));
+  let sceneId = null, persistent = false;
+  if (apiReq) {
+    const cid = String(Date.now());
+    try {
+      await apiReq("POST", "config/scene/config/" + cid, { id: cid, name, entities }); persistent = true;
+      await conn.call("scene", "reload", {});
+      sceneId = await waitFor(() => { const s = [...states.values()].find(x => domainOf(x.entity_id) === "scene" && x.attributes.id === cid); return s && s.entity_id; });
+    } catch {}
+    if (persistent && !sceneId) throw new Error("Die Szene ist gespeichert, erscheint aber noch nicht. Füge sie gleich über „Geräte“ hinzu.");
+  }
+  if (!sceneId) {   // Rückfall ohne Schreibrecht: Szene gilt bis zum nächsten Neustart von Home Assistant
+    const slug = name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "szene";
+    if (!(await conn.call("scene", "create", { scene_id: slug, entities }))) throw new Error("Home Assistant hat die Szene abgelehnt.");
+    sceneId = await waitFor(() => (states.has("scene." + slug) ? "scene." + slug : null));
+    if (sceneId) { const o = (cfgOf().ent[sceneId] = cfgOf().ent[sceneId] || {}); o.name = name; }
+  }
+  if (!sceneId) throw new Error("Die Szene erscheint nicht in Home Assistant.");
+  if (!roomMembers(rid).includes(sceneId)) toggleMember(rid, sceneId);
+  saveLayout(); renderRooms(); renderGrid();
+  return { sceneId, persistent };
+}
+
+function openSceneCapture() {
+  const rooms = roomList().filter(r => r.id !== OTHER).map(r => [r.id, r.id === HOME ? "Ganzes Haus" : r.name]);
+  let rid = rooms.some(r => r[0] === room) ? room : HOME, step = 1, before = null, now = [], sel = new Set(), name = "";
+  const changedOf = s => !before.has(s.entity_id) || before.get(s.entity_id) !== JSON.stringify(sceneEntry(s));
+  const stepsBar = () => { const b = h("div", "sc-steps"); ["Vorher merken", "In Apple Home einstellen", "Auswählen und speichern"].forEach((t, i) => { const d = h("div", "sc-step" + (i + 1 === step ? " on" : i + 1 < step ? " done" : "")); d.append(h("i", "", String(i + 1)), h("span", "", t)); b.append(d); }); return b; };
+  openPanel("Szene erfassen", body => {
+    const render = () => {
+      body.replaceChildren(stepsBar());
+      if (step === 1) {
+        const sg = seg(body, { label: "Raum", options: rooms, on: v => { rid = v; sg.set(v); } }); sg.set(rid);
+        body.append(h("div", "info", "HomeView merkt sich den Zustand aller Geräte im Raum. Danach stellst du in Apple Home die Szene ein, die du übernehmen willst."));
+        actions(body, [["Zustand merken", () => { before = new Map(sceneCandidates(rid).map(s => [s.entity_id, JSON.stringify(sceneEntry(s))])); step = 2; render(); }]]);
+        body.lastChild.firstChild.classList.add("vgo");
+      } else if (step === 2) {
+        body.append(h("div", "info", `Gemerkt: ${before.size} Geräte. Stelle jetzt in Apple Home die Szene ein und komm zurück.`));
+        const err = h("div", "info err");
+        actions(body, [["Szene ist eingestellt, Unterschiede suchen", () => {
+          now = sceneCandidates(rid); sel = new Set(now.filter(changedOf).map(s => s.entity_id));
+          if (!sel.size) { err.textContent = "Es hat sich noch nichts geändert. Stelle zuerst die Szene in Apple Home ein."; return; }
+          step = 3; render(); }], ["Zurück", () => { step = 1; render(); }]]);
+        body.append(err);
+        body.querySelector(".actions button").classList.add("vgo");
+      } else {
+        const inp = h("input", "textin"); inp.placeholder = "Name der Szene, zum Beispiel Abend"; inp.value = name; inp.setAttribute("aria-label", "Name der Szene");
+        const nameBox = h("div", "ctl"), nr = h("div", "ctl-row"); nr.append(h("span", "", "Name")); nameBox.append(nr, inp); body.append(nameBox);
+        const cnt = h("span", ""), cr = h("div", "ctl-row"), cbox = h("div", "ctl"); cr.append(h("span", "", "Geräte in der Szene"), cnt); cbox.append(cr); body.append(cbox);
+        actions(body, [["Nur Geänderte", () => { sel = new Set(now.filter(changedOf).map(s => s.entity_id)); drawList(); }], ["Alle", () => { sel = new Set(now.map(s => s.entity_id)); drawList(); }]]);
+        const list = h("div", "picklist"); body.append(list);
+        const msg = h("div", "info err"); let save;
+        const drawList = () => {
+          cnt.textContent = sel.size + " gewählt"; if (save) save.disabled = !sel.size || !inp.value.trim();
+          list.replaceChildren(...SCENE_GROUPS.flatMap(([title, doms]) => {
+            const items = now.filter(s => doms.includes(domainOf(s.entity_id))); if (!items.length) return [];
+            return [h("div", "pick-group", title), ...items.map(s => {
+              const r = h("button", "pick-row"); r.type = "button"; r.setAttribute("aria-pressed", String(sel.has(s.entity_id)));
+              const nm = h("span", "pick-name", nameOf(s)); if (changedOf(s)) nm.append(h("span", "sc-tag", "geändert"));
+              r.append(h("span", "pick-check", "✓"), nm, h("span", "pick-id", sceneText(sceneEntry(s), s.entity_id)));
+              r.addEventListener("click", () => { sel.has(s.entity_id) ? sel.delete(s.entity_id) : sel.add(s.entity_id); drawList(); }); return r; })];
+          }));
+        };
+        actions(body, [["Szene speichern", async () => {
+          name = inp.value.trim(); if (!name || !sel.size) return; save.disabled = true; msg.textContent = "Szene wird gespeichert …";
+          try { const r = await createScene(name, [...sel], rid); closeSheet(); toast(r.persistent ? `Szene „${name}“ gespeichert` : `Szene „${name}“ gilt nur bis zum nächsten Neustart. Zum dauerhaften Speichern braucht es Administratorrechte.`); }
+          catch (e) { msg.textContent = e.message || "Speichern ist nicht möglich."; save.disabled = false; }
+        }]]);
+        save = body.lastChild.querySelector("button"); save.classList.add("vgo"); body.append(msg);
+        inp.addEventListener("input", drawList); drawList();
+      }
+    };
+    render();
+  });
+}
+
+const sceneCfgId = id => states.get(id)?.attributes.id;
+async function writeScene(id, patch) {
+  const cid = sceneCfgId(id), cur = await apiReq("GET", "config/scene/config/" + cid);
+  await apiReq("POST", "config/scene/config/" + cid, { ...cur, id: cid, ...patch(cur) });
+  await conn.call("scene", "reload", {});
 }
 
 /* ---------- Kachel-Fabrik ---------- */
@@ -1343,6 +1482,7 @@ function renderRooms() {
   const bar = [];
   if (editing) {
     bar.push(mk(chipsOn() ? "Chips: An" : "Chips: Aus", () => { const c = cfgOf(); c.chips = !chipsOn(); saveLayout(); renderChips(); renderRooms(); }, "ghost"));
+    bar.push(mk("Szene erfassen", openSceneCapture, "ghost"));
     bar.push(mk("Räume", openRoomManager, "ghost"));
     if (room !== OTHER) bar.push(mk("Geräte", openDevicePicker, "ghost"));
     bar.push(mk("Zurücksetzen", () => { delete layout[room]; saveLayout(); tiles.forEach(t => { t.el.style.gridColumn = t.el.style.gridRow = ""; }); renderGrid(); }, "ghost"));
@@ -1868,7 +2008,7 @@ async function startViaConn(promise) {
 async function startParent(ha) {
   dbg("Modus: Anmeldung über Dashboard");
   const request = msg => ha.hass.callWS(msg);
-  wsReq = request;
+  wsReq = request; apiReq = (m, p, b) => ha.hass.callApi(m, p, b);
   conn = { close() {}, call: (domain, service, data = {}, id) =>
     request({ type: "call_service", domain, service, service_data: data, ...(id ? { target: { entity_id: id } } : {}) }).then(() => true, () => false) };
   loadFromHass(ha);
@@ -1885,6 +2025,8 @@ async function startParent(ha) {
 
 function startLive({ url, token }) {
   haBase = url.replace(/\/+$/, "");
+  apiReq = (m, p, b) => fetch(haBase + "/api/" + p, { method: m, headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: b ? JSON.stringify(b) : undefined })
+    .then(r => { if (!r.ok) throw new Error(String(r.status)); return r.status === 204 ? null : r.json(); });
   conn = connectHA(url, token, {
     onAuthError() { try { localStorage.removeItem(STORE); } catch {} showSetup("Token wurde abgelehnt. Bitte neu eingeben."); },
     onStatus(ok) { $("banner").hidden = ok; },
@@ -2030,6 +2172,7 @@ function startDemo() {
     "button.press": () => {},
     "select.select_option": (id, d) => set(id, d.option),
     "switch.turn_on": id => set(id, "on"), "switch.turn_off": id => set(id, "off"),
+    "scene.create": (id, d) => { pushState({ entity_id: "scene." + d.scene_id, state: "scening", attributes: { friendly_name: d.scene_id } }); },
     "vacuum.stop": id => set(id, "idle"),
     "dreame_vacuum.vacuum_clean_segment": id => set(id, "cleaning", { status: "Reinigt" }),
     "camera.turn_on": id => set(id, "idle"), "camera.turn_off": id => set(id, "off"),

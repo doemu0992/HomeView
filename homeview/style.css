@@ -506,3 +506,14 @@ main{flex:1}
 .pv-bar i{display:block;height:100%;background:var(--c)}
 @media(max-width:520px){.pv-stats{grid-template-columns:repeat(2,1fr)}}
 .chip[class*="pw-"] .ic{color:inherit}
+
+/* Szene erfassen */
+.sc-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem}
+.sc-step{display:flex;align-items:center;gap:.5rem;border-radius:1rem;background:rgba(255,255,255,.08);padding:.6rem .8rem;font-size:.95rem;color:var(--ink-2)}
+.sc-step i{width:1.6rem;height:1.6rem;border-radius:50%;background:rgba(255,255,255,.14);display:grid;place-items:center;font-style:normal;font-size:.85rem;flex:none}
+.sc-step.on{background:rgba(143,124,255,.3);color:#fff}
+.sc-step.on i{background:#8f7cff;color:#120c2a;font-weight:700}
+.sc-step.done i{background:#5be08a;color:#10201a}
+.sc-tag{display:inline-block;font-size:.75rem;padding:.1rem .5rem;border-radius:.6rem;margin-left:.5rem;background:rgba(255,181,77,.25);color:#ffd592;font-weight:500}
+.sheet-card .pick-row .pick-id{max-width:12rem;color:var(--ink-2)}
+@media(max-width:560px){.sc-steps{grid-template-columns:1fr}}
