@@ -1519,17 +1519,25 @@ render();
 const sceneDefs = new Map();        // Szene -> { entities: { entity_id: Zielzustand } }
 const SCENE_TOL = { brightness: 8, color_temp_kelvin: 200, current_position: 4, current_tilt_position: 4, percentage: 6, humidity: 3, temperature: 0.6, target_temp_high: 0.6, target_temp_low: 0.6, hs_color: 5, xy_color: 0.03, rgb_color: 14, rgbw_color: 14, rgbww_color: 14 };
 function sceneMatches(cur, want) {
-const have = sceneEntry(cur);
-if (have.state !== want.state) return false;
+if (sceneEntry(cur).state !== want.state) return false;
 return Object.entries(want).every(([k, v]) => {
 if (k === "state" || v == null) return true;
-const h2 = have[k]; if (h2 == null) return false;
+const h2 = cur.attributes[k]; if (h2 == null) return false;
 if (Array.isArray(v)) return v.every((x, i) => Math.abs(x - h2[i]) <= (SCENE_TOL[k] ?? 1));
 if (typeof v === "number") return Math.abs(v - h2) <= (SCENE_TOL[k] ?? 1);
 return v === h2;
 });
 }
+const helperCache = new Map();      // Szene -> { t, id } (Schalter-Helfer für Apple Home)
+function sceneHelper(id) {
+const c = helperCache.get(id); if (c && Date.now() - c.t < 20000) return c.id && states.get(c.id);
+const want = "Szene " + nameOf(states.get(id));
+const sw = [...states.values()].find(x => domainOf(x.entity_id) === "switch" && x.attributes.friendly_name === want);
+helperCache.set(id, { t: Date.now(), id: sw ? sw.entity_id : null });
+return sw;
+}
 function sceneActive(id) {
+const hp = sceneHelper(id); if (hp && hp.state !== "unavailable") return hp.state === "on";
 const def = sceneDefs.get(id); if (!def) return false;
 let n = 0;
 for (const [e, want] of Object.entries(def.entities)) {
@@ -1550,7 +1558,12 @@ const cid = states.get(id)?.attributes.id; if (!cid) return;
 try { const d = await apiReq("GET", "config/scene/config/" + cid); if (d && d.entities) { sceneDefs.set(id, { entities: d.entities }); tiles.get(id)?.update(states.get(id)); } } catch {}
 }
 function sceneRecheck(entityId) {
-tiles.forEach((t, id) => { if (id.startsWith("scene.") && sceneDefs.get(id)?.entities[entityId] && states.has(id)) t.update(states.get(id)); });
+const isHelper = entityId.startsWith("switch.") && String(states.get(entityId)?.attributes.friendly_name || "").startsWith("Szene ");
+if (isHelper) helperCache.clear();
+tiles.forEach((t, id) => {
+if (!id.startsWith("scene.") || !states.has(id)) return;
+if (isHelper || sceneDefs.get(id)?.entities[entityId]) t.update(states.get(id));
+});
 }
 /* ---------- Szenen für Apple Home bereitstellen: Schalter „Szene …“, der anzeigt, ob die Szene aktiv ist, und sie beim Einschalten startet ---------- */
 const slugOf = t => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "szene";
