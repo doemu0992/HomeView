@@ -867,6 +867,7 @@ const DETAIL = {
     if (feat(a0, 4)) items.push(["Nacht scharf", run("alarm_arm_night")]);
     if ((a0.supported_features & 32) === 32) items.push(["Urlaub scharf", run("alarm_arm_vacation")]);
     actions(body, items); body.append(err);
+    actions(body, [["Für Apple Home bereitstellen (ohne Zahlenfeld)", () => openAlarmBridge(id)]]);
     return s => { status.textContent = ALARM[s.state] || s.state; };
   },
 
@@ -1360,6 +1361,52 @@ async function openSceneBridge(ids) {
         : r.status === "already" ? "Fertig. Die Schalter sind schon in der HomeKit-Bridge. In Apple Home erscheinen sie als „Szene …“."
         : "Fertig. Die Schalter sind in der HomeKit-Bridge „" + r.bridge + "“. In Apple Home erscheinen sie in einigen Sekunden als „Szene …“. Danach kannst du die alte Szene dort löschen.";
     } catch (e) { fallback("Die Schalter sind angelegt, ließen sich aber nicht in die HomeKit-Bridge aufnehmen (" + (e.message || "Fehler") + "). Nimm sie dort von Hand auf: Einstellungen → Geräte & Dienste → HomeKit Bridge → Konfigurieren."); }
+  });
+}
+
+/* Alarmanlage für Apple Home: Apple Home hat kein Zahlenfeld. Ein Schalter schaltet mit hinterlegtem Code scharf und unscharf. */
+async function createTemplateSwitch(name, template, onActions, offActions) {
+  const findSw = () => [...states.values()].find(x => domainOf(x.entity_id) === "switch" && x.attributes.friendly_name === name);
+  const old = findSw();
+  if (old) {
+    let reg; try { reg = await wsReq({ type: "config/entity_registry/get", entity_id: old.entity_id }); } catch {}
+    if (!reg || !reg.config_entry_id) throw new Error("Ein Schalter „" + name + "“ ist schon vorhanden, aber nicht von HomeView angelegt");
+    await apiReq("DELETE", "config/config_entries/entry/" + reg.config_entry_id);
+    await waitFor(() => !states.has(old.entity_id), 4000);
+  }
+  await runFlow("config/config_entries/flow", { handler: "template", show_advanced_options: false }, {
+    menu: "switch", form: () => ({ name, value_template: template, turn_on: onActions, turn_off: offActions })
+  });
+  const sw = await waitFor(findSw, 8000);
+  if (!sw) throw new Error("Der Schalter erscheint nicht in Home Assistant");
+  return sw.entity_id;
+}
+function openAlarmBridge(id) {
+  openPanel("Alarm für Apple Home", body => {
+    const a0 = states.get(id).attributes; let mode = feat(a0, 2) ? "alarm_arm_away" : feat(a0, 1) ? "alarm_arm_home" : "alarm_arm_night";
+    body.append(h("div", "info", "Apple Home kann bei einer Alarmanlage keinen Code eingeben. Deshalb kannst du dort nicht unscharf schalten. HomeView legt einen Schalter an, der mit dem Code unten scharf und unscharf schaltet. Er erscheint in Apple Home als Schalter."));
+    const modes = [["alarm_arm_away", "Abwesend", feat(a0, 2)], ["alarm_arm_home", "Zuhause", feat(a0, 1)], ["alarm_arm_night", "Nacht", feat(a0, 4)]].filter(m => m[2]).map(m => [m[0], m[1]]);
+    const sg = modes.length > 1 ? seg(body, { label: "Einschalten bedeutet", options: modes, on: v => { mode = v; sg.set(v); } }) : null; sg && sg.set(mode);
+    const cw = h("div", "ctl"), cr = h("div", "ctl-row"), inp = h("input", "textin"); cr.append(h("span", "", "Code der Alarmanlage"));
+    inp.type = "password"; inp.inputMode = "numeric"; inp.autocomplete = "off"; inp.placeholder = "Code (leer lassen, wenn keiner nötig ist)"; inp.setAttribute("aria-label", "Code der Alarmanlage"); cw.append(cr, inp); body.append(cw);
+    body.append(h("div", "info", "Wichtig: Jeder, der Apple Home bei dir bedienen darf, kann damit die Alarmanlage ausschalten, ohne den Code zu kennen. Der Code liegt im Schalter in Home Assistant und ist nur für Administratoren sichtbar."));
+    const msg = h("div", "info"); let btn;
+    actions(body, [["Schalter anlegen", async () => {
+      if (!apiReq || !wsReq) { msg.className = "info err"; msg.textContent = "Das geht nur mit einer Anmeldung als Administrator über das Dashboard."; return; }
+      btn.disabled = true; msg.className = "info"; msg.textContent = "Schalter wird angelegt …";
+      const data = inp.value.trim() ? { code: inp.value.trim() } : {};
+      try {
+        const sw = await createTemplateSwitch("Alarm " + nameOf(states.get(id)), `{{ not is_state('${id}', 'disarmed') }}`,
+          [{ action: "alarm_control_panel." + mode, target: { entity_id: id }, data }], [{ action: "alarm_control_panel.alarm_disarm", target: { entity_id: id }, data }]);
+        msg.textContent = "Schalter angelegt. Wird in die HomeKit-Bridge aufgenommen …";
+        let r; try { r = await exposeInHomeKit([sw]); } catch (e) { r = { status: "error", err: e.message }; }
+        msg.textContent = r.status === "added" ? "Fertig. In Apple Home erscheint der Schalter „" + nameOf(states.get(sw)) + "“ in einigen Sekunden. Damit kannst du scharf und unscharf schalten."
+          : r.status === "already" ? "Fertig. Der Schalter ist schon in der HomeKit-Bridge."
+          : "Der Schalter ist angelegt. Nimm ihn in die HomeKit-Bridge auf: Einstellungen → Geräte & Dienste → HomeKit Bridge → Konfigurieren.";
+        inp.value = "";
+      } catch (e) { msg.className = "info err"; msg.textContent = "Das hat nicht geklappt: " + (e.message || "Fehler") + ". Dafür braucht es Administratorrechte."; btn.disabled = false; }
+    }]]);
+    btn = body.lastChild.querySelector("button"); btn.classList.add("vgo"); body.append(msg);
   });
 }
 

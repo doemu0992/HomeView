@@ -125,3 +125,7 @@ Eine Szene gilt nur als aktiv, wenn ihre Geräte stimmen und keine andere Szene 
 ## Symbole
 
 Über 170 Symbole stehen zur Wahl, mit Suchfeld (zum Beispiel „Film“, „Kamin“, „Stehlampe“), sortiert nach Szenen (Verlassen, Ankommen, Morgen, Nacht, Film, Essen, Party, Lesen, Sport, Urlaub und mehr), Licht (Tisch-, Nachttisch-, Steh-, Hänge-, Einbau-, Schienen-, Weg- und Kugelleuchten, LED-Streifen und weitere), Schalter und Strom, Klima, Wohnen, Küche und Haushalt sowie Sicherheit und Haus. Szenen und Lampen bekommen das passende Symbol automatisch nach ihrem Namen, zum Beispiel „Zuhause verlassen“, „Guten Morgen“, „Filmabend“ oder „Nachttischlampe“. Jedes Symbol lässt sich im Bearbeiten-Fenster ändern.
+
+## Alarmanlage in Apple Home
+
+Apple Home hat kein Zahlenfeld, deshalb lässt sich eine Alarmanlage mit Code dort nicht unscharf schalten. Im Alarm-Fenster legt „Für Apple Home bereitstellen (ohne Zahlenfeld)“ einen Schalter „Alarm …“ an, der mit hinterlegtem Code scharf (Abwesend, Zuhause oder Nacht) und unscharf schaltet, und nimmt ihn in die HomeKit-Bridge auf. Der Schalter ist an, solange die Anlage nicht unscharf ist. Wer Apple Home bedienen darf, kann damit die Anlage ausschalten. Der Code liegt im Schalter in Home Assistant und ist nur für Administratoren sichtbar. Voraussetzung sind Administratorrechte und eine Anmeldung über das Dashboard.
