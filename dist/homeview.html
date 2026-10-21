@@ -1582,8 +1582,8 @@ out.push("        turn_on:", "          - action: scene.turn_on", "            t
 });
 return out.join("\n");
 }
-async function openSceneBridge(ids) {
-openPanel("Für Apple Home bereitstellen", async body => {
+async function openSceneBridgeYaml(ids) {
+openPanel("Schalter als Text", async body => {
 body.append(h("div", "info", "Lade Inhalt der Szenen …"));
 await Promise.all(ids.map(ensureSceneDef));
 const items = ids.filter(i => states.has(i)).map(i => ({ id: i, name: nameOf(states.get(i)), entities: sceneDefs.get(i)?.entities }));
@@ -1607,6 +1607,103 @@ try { await navigator.clipboard.writeText(yaml); msg.textContent = "Kopiert."; }
 catch { const r = document.createRange(); r.selectNodeContents(pre); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); msg.textContent = "Der Text ist markiert. Kopiere ihn jetzt mit Teilen oder Kopieren."; } }]]);
 body.append(msg);
 if (items.some(x => !states.get(x.id).attributes.id)) body.append(h("div", "info", "Hinweis: Szenen, die nur bis zum Neustart gelten, fehlen danach in Home Assistant. Speichere sie als Administrator dauerhaft."));
+});
+}
+/* Automatisch: Schalter-Helfer in Home Assistant anlegen und in die HomeKit-Bridge aufnehmen (braucht Administratorrechte) */
+const defaultsOf = schema => Object.fromEntries((schema || []).filter(f => f.default !== undefined).map(f => [f.name, f.default]));
+async function runFlow(base, start, pickStep) {
+let r = await apiReq("POST", base, start);
+for (let i = 0; i < 10; i++) {
+if (r.type === "create_entry") return r;
+if (r.type === "abort") throw new Error(r.reason || "abgebrochen");
+if (r.type === "menu") { r = await apiReq("POST", base + "/" + r.flow_id, { next_step_id: pickStep.menu }); continue; }
+if (r.type !== "form") throw new Error("Unerwartete Antwort: " + r.type);
+const defs = defaultsOf(r.data_schema), over = pickStep.form(r, defs);
+if (over === "abort") { try { await apiReq("DELETE", base + "/" + r.flow_id); } catch {} return { type: "aborted", info: defs }; }
+r = await apiReq("POST", base + "/" + r.flow_id, { ...defs, ...over });
+if (r.type === "form" && r.errors && Object.keys(r.errors).length) throw new Error("Home Assistant meldet: " + JSON.stringify(r.errors));
+}
+throw new Error("Zu viele Schritte");
+}
+async function provisionSceneSwitch(id) {
+const name = nameOf(states.get(id)), swName = "Szene " + name, def = sceneDefs.get(id);
+if (!def) throw new Error("Inhalt der Szene unbekannt");
+const findSw = () => [...states.values()].find(x => domainOf(x.entity_id) === "switch" && x.attributes.friendly_name === swName);
+const old = findSw();
+if (old) {   // vorhandenen Helfer ersetzen, damit er zum aktuellen Inhalt der Szene passt
+let reg; try { reg = await wsReq({ type: "config/entity_registry/get", entity_id: old.entity_id }); } catch {}
+if (!reg || !reg.config_entry_id) return { entity: old.entity_id, kept: true };
+await apiReq("DELETE", "config/config_entries/entry/" + reg.config_entry_id);
+await waitFor(() => !states.has(old.entity_id), 4000);
+}
+await runFlow("config/config_entries/flow", { handler: "template", show_advanced_options: false }, {
+menu: "switch",
+form: () => ({ name: swName, value_template: "{{ " + sceneJinja(def.entities).replace(/\n    and /g, " and ") + " }}", turn_on: [{ action: "scene.turn_on", target: { entity_id: id } }] })
+});
+const sw = await waitFor(findSw, 8000);
+if (!sw) throw new Error("Der Schalter erscheint nicht in Home Assistant");
+return { entity: sw.entity_id, kept: false };
+}
+async function exposeInHomeKit(entities) {
+const list = await wsReq({ type: "config_entries/get", domain: "homekit" });
+if (!list || !list.length) return { status: "no_bridge" };
+for (const entry of list) {
+const base = "config/config_entries/options/flow";
+let mode = null, hadSwitch = false, chosen = false;
+const res = await runFlow(base, { handler: entry.entry_id }, {
+form: (r, d) => {
+if (r.step_id === "init") {
+mode = d.mode; hadSwitch = (d.domains || []).includes("switch");
+if (mode && mode !== "bridge") return "abort";
+chosen = true;
+return { domains: [...new Set([...(d.domains || []), "switch"])] };
+}
+if (r.step_id === "include") {
+const have = d.entities || [], partial = have.some(e => e.startsWith("switch."));
+if (hadSwitch && !partial) return "abort";      // ganze Schalter-Domäne ist schon enthalten
+const add = entities.filter(e => !have.includes(e));
+if (!add.length) return "abort";
+return { entities: [...have, ...add] };
+}
+if (r.step_id === "exclude") {
+const have = d.entities || [], keep = have.filter(e => !entities.includes(e));
+if (hadSwitch && keep.length === have.length) return "abort";   // nichts ausgeschlossen
+return { entities: keep };
+}
+return {};
+}
+});
+if (res.type === "create_entry") return { status: "added", bridge: entry.title };
+if (res.type === "aborted" && chosen) return { status: "already", bridge: entry.title };
+}
+return { status: "no_bridge" };
+}
+async function openSceneBridge(ids) {
+openPanel("Für Apple Home bereitstellen", async body => {
+const rows = new Map(), box = h("div", "vgrp"); box.append(h("h4", "", "Szenen"));
+const setRow = (id, txt, cls) => { let r = rows.get(id); if (!r) { r = h("div", "vrow"); r.append(h("span", "vn", nameOf(states.get(id))), h("span", "vv")); rows.set(id, r); box.append(r); } r.lastChild.textContent = txt; r.lastChild.style.color = cls || ""; };
+ids = ids.filter(i => states.has(i)); if (!ids.length) { body.append(h("div", "info", "In diesem Raum gibt es keine Szenen.")); return; }
+const msg = h("div", "info"); body.append(box, msg);
+const fallback = why => { msg.textContent = why; msg.className = "info err"; actions(body, [["Stattdessen Text zum Kopieren anzeigen", () => openSceneBridgeYaml(ids)]]); };
+if (!apiReq || !wsReq) return fallback("Das automatische Anlegen geht hier nicht. Du brauchst eine Anmeldung als Administrator über das Dashboard.");
+ids.forEach(i => setRow(i, "wartet …"));
+await Promise.all(ids.map(ensureSceneDef));
+const done = []; let failed = 0;
+for (const id of ids) {
+if (!sceneDefs.get(id)) { setRow(id, "Inhalt unbekannt", "#ff8a80"); failed++; continue; }
+setRow(id, "Schalter wird angelegt …");
+try { const r = await provisionSceneSwitch(id); done.push(r.entity); setRow(id, r.kept ? "Schalter vorhanden" : "Schalter angelegt", "#8ff0aa"); }
+catch (e) { failed++; setRow(id, "Fehler: " + (e.message || "unbekannt"), "#ff8a80"); }
+}
+if (!done.length) return fallback("Es konnte kein Schalter angelegt werden. Das geht nur mit Administratorrechten.");
+msg.textContent = "Schalter werden in die HomeKit-Bridge aufgenommen …";
+try {
+const r = await exposeInHomeKit(done);
+msg.className = "info";
+msg.textContent = r.status === "no_bridge" ? "Die Schalter sind angelegt. Es gibt aber keine HomeKit-Bridge im Brückenmodus. Richte sie unter Einstellungen → Geräte & Dienste → HomeKit Bridge ein."
+: r.status === "already" ? "Fertig. Die Schalter sind schon in der HomeKit-Bridge. In Apple Home erscheinen sie als „Szene …“."
+: "Fertig. Die Schalter sind in der HomeKit-Bridge „" + r.bridge + "“. In Apple Home erscheinen sie in einigen Sekunden als „Szene …“. Danach kannst du die alte Szene dort löschen.";
+} catch (e) { fallback("Die Schalter sind angelegt, ließen sich aber nicht in die HomeKit-Bridge aufnehmen (" + (e.message || "Fehler") + "). Nimm sie dort von Hand auf: Einstellungen → Geräte & Dienste → HomeKit Bridge → Konfigurieren."); }
 });
 }
 const sceneCfgId = id => states.get(id)?.attributes.id;
