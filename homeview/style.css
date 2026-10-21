@@ -519,3 +519,5 @@ main{flex:1}
 @media(max-width:560px){.sc-steps{grid-template-columns:1fr}}
 .br-steps{margin:0;padding-left:1.4rem;display:grid;gap:.6rem;font-size:1.1rem;color:var(--ink-2)}
 .br-steps li::marker{color:#b9acff;font-weight:700}
+.sheet-card .actions button.vgo{background:#8f7cff;color:#120c2a}
+.sheet-card .actions button.vgo:disabled{opacity:.45}

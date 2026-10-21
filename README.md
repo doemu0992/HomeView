@@ -106,7 +106,11 @@ Räume, Reihenfolge, Größen, Namen, Symbole und Chips werden im gemeinsamen Sp
 
 ## Szenen aus Apple Home übernehmen
 
-Im Anordnen-Modus: „Szene erfassen“. Zuerst merkt sich HomeView den Zustand der Geräte im gewählten Raum (oder im ganzen Haus). Dann stellst du in Apple Home die Szene ein. HomeView sucht die Unterschiede, wählt die geänderten Geräte vor (Lichter, Steckdosen, Schlösser, Rollos, Ventilatoren, Thermostate) und legt nach dem Speichern eine echte Home-Assistant-Szene an. Sie erscheint als Kachel im Raum. Lang drücken auf die Kachel zeigt den Inhalt und erlaubt Überschreiben, Umbenennen und Löschen. Dauerhaft speichern können nur Administratoren. Ohne diese Rechte gilt die Szene bis zum nächsten Neustart von Home Assistant. HomeView fragt beim Start einer Szene nie nach, auch nicht, wenn sie ein Schloss entriegelt.
+1. Szene in Apple Home einstellen.
+2. In HomeView unten auf „+ Szene“ tippen. HomeView hat die letzten Änderungen der Geräte (Lichter, Steckdosen, Schlösser, Rollos, Ventilatoren, Thermostate) der letzten drei Minuten mitgelesen und wählt sie vor.
+3. Namen eingeben, „Szene speichern“. Die Szene wird als echte Home-Assistant-Szene angelegt und erscheint als Kachel im aktuellen Raum.
+
+Geräte, die schon vorher so standen, lassen sich unter „Weitere Geräte im Raum anzeigen“ dazuwählen. Lang drücken auf die Szenen-Kachel zeigt den Inhalt und erlaubt Überschreiben, Umbenennen und Löschen. Dauerhaft speichern können nur Administratoren, sonst gilt die Szene bis zum nächsten Neustart von Home Assistant. HomeView fragt beim Start einer Szene nie nach, auch nicht, wenn sie ein Schloss entriegelt.
 
 Eine Szenen-Kachel bleibt weiß („Aktiv“), solange alle Geräte der Szene so stehen, wie die Szene sie speichert. Kleine Rundungsunterschiede bei Helligkeit, Farbe oder Position zählen nicht. Ändert sich ein Gerät, wird die Kachel wieder dunkel. Dafür liest HomeView den Inhalt der Szene aus Home Assistant (Administratorrechte nötig, sonst nur für Szenen, die HomeView in dieser Sitzung angelegt hat).
 

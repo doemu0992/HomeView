@@ -158,7 +158,10 @@ const nameOf = s => {
 function notifyRelated(id) {
   if (sheetCtx && sheetCtx.rel && sheetCtx.rel.has(id) && states.has(sheetCtx.id)) sheetCtx.update(states.get(sheetCtx.id));
 }
+const lastChange = new Map();       // Gerät -> Zeitpunkt der letzten Änderung (für „Szene speichern“)
 function pushState(s) {
+  const old = states.get(s.entity_id);
+  if (old && SCENE_DOMAINS.includes(domainOf(s.entity_id)) && JSON.stringify(sceneEntry(old)) !== JSON.stringify(sceneEntry(s))) lastChange.set(s.entity_id, Date.now());
   states.set(s.entity_id, s);
   tiles.get(s.entity_id)?.update(s);
   if (!s.entity_id.startsWith("scene.")) sceneRecheck(s.entity_id);
@@ -946,60 +949,42 @@ async function createScene(name, ids, rid) {
   return { sceneId, persistent };
 }
 
+/* Szene speichern in einem Schritt: HomeView hat die letzten Änderungen der Geräte mitgelesen und wählt diese vor */
 function openSceneCapture() {
-  const rooms = roomList().filter(r => r.id !== OTHER).map(r => [r.id, r.id === HOME ? "Ganzes Haus" : r.name]);
-  let rid = rooms.some(r => r[0] === room) ? room : HOME, step = 1, before = null, now = [], sel = new Set(), name = "";
-  const changedOf = s => !before.has(s.entity_id) || before.get(s.entity_id) !== JSON.stringify(sceneEntry(s));
-  const stepsBar = () => { const b = h("div", "sc-steps"); ["Vorher merken", "In Apple Home einstellen", "Auswählen und speichern"].forEach((t, i) => { const d = h("div", "sc-step" + (i + 1 === step ? " on" : i + 1 < step ? " done" : "")); d.append(h("i", "", String(i + 1)), h("span", "", t)); b.append(d); }); return b; };
-  openPanel("Szene erfassen", body => {
-    const render = () => {
-      body.replaceChildren(stepsBar());
-      if (step === 1) {
-        const sg = seg(body, { label: "Raum", options: rooms, on: v => { rid = v; sg.set(v); } }); sg.set(rid);
-        body.append(h("div", "info", "HomeView merkt sich den Zustand aller Geräte im Raum. Danach stellst du in Apple Home die Szene ein, die du übernehmen willst."));
-        actions(body, [["Zustand merken", () => { before = new Map(sceneCandidates(rid).map(s => [s.entity_id, JSON.stringify(sceneEntry(s))])); step = 2; render(); }]]);
-        body.lastChild.firstChild.classList.add("vgo");
-        body.append(h("div", "info", "Tipp: Schaltest du vorher Lichter und Steckdosen aus, werden alle Geräte der Szene erfasst und nicht nur die, die sich ändern."));
-        actions(body, [["Lichter und Steckdosen ausschalten, dann merken", () => {
-          sceneCandidates(rid).filter(x => ["light", "switch", "input_boolean"].includes(domainOf(x.entity_id)) && x.state === "on").forEach(x => conn.call(domainOf(x.entity_id), "turn_off", {}, x.entity_id));
-          setTimeout(() => { before = new Map(sceneCandidates(rid).map(x => [x.entity_id, JSON.stringify(sceneEntry(x))])); step = 2; render(); }, 2000); }]]);
-      } else if (step === 2) {
-        body.append(h("div", "info", `Gemerkt: ${before.size} Geräte. Stelle jetzt in Apple Home die Szene ein und komm zurück.`));
-        const err = h("div", "info err");
-        actions(body, [["Szene ist eingestellt, Unterschiede suchen", () => {
-          now = sceneCandidates(rid); sel = new Set(now.filter(changedOf).map(s => s.entity_id));
-          if (!sel.size) { err.textContent = "Es hat sich noch nichts geändert. Stelle zuerst die Szene in Apple Home ein."; return; }
-          step = 3; render(); }], ["Zurück", () => { step = 1; render(); }]]);
-        body.append(err);
-        body.querySelector(".actions button").classList.add("vgo");
-      } else {
-        const inp = h("input", "textin"); inp.placeholder = "Name der Szene, zum Beispiel Abend"; inp.value = name; inp.setAttribute("aria-label", "Name der Szene");
-        const nameBox = h("div", "ctl"), nr = h("div", "ctl-row"); nr.append(h("span", "", "Name")); nameBox.append(nr, inp); body.append(nameBox);
-        const cnt = h("span", ""), cr = h("div", "ctl-row"), cbox = h("div", "ctl"); cr.append(h("span", "", "Geräte in der Szene"), cnt); cbox.append(cr); body.append(cbox);
-        actions(body, [["Nur Geänderte", () => { sel = new Set(now.filter(changedOf).map(s => s.entity_id)); drawList(); }], ["Alle", () => { sel = new Set(now.map(s => s.entity_id)); drawList(); }]]);
-        const list = h("div", "picklist"); body.append(list);
-        const msg = h("div", "info err"); let save;
-        const drawList = () => {
-          cnt.textContent = sel.size + " gewählt"; if (save) save.disabled = !sel.size || !inp.value.trim();
-          list.replaceChildren(...SCENE_GROUPS.flatMap(([title, doms]) => {
-            const items = now.filter(s => doms.includes(domainOf(s.entity_id))); if (!items.length) return [];
-            return [h("div", "pick-group", title), ...items.map(s => {
-              const r = h("button", "pick-row"); r.type = "button"; r.setAttribute("aria-pressed", String(sel.has(s.entity_id)));
-              const nm = h("span", "pick-name", nameOf(s)); if (changedOf(s)) nm.append(h("span", "sc-tag", "geändert"));
-              r.append(h("span", "pick-check", "✓"), nm, h("span", "pick-id", sceneText(sceneEntry(s), s.entity_id)));
-              r.addEventListener("click", () => { sel.has(s.entity_id) ? sel.delete(s.entity_id) : sel.add(s.entity_id); drawList(); }); return r; })];
-          }));
-        };
-        actions(body, [["Szene speichern", async () => {
-          name = inp.value.trim(); if (!name || !sel.size) return; save.disabled = true; msg.textContent = "Szene wird gespeichert …";
-          try { const r = await createScene(name, [...sel], rid); closeSheet(); toast(r.persistent ? `Szene „${name}“ gespeichert` : `Szene „${name}“ gilt nur bis zum nächsten Neustart. Zum dauerhaften Speichern braucht es Administratorrechte.`); }
-          catch (e) { msg.textContent = e.message || "Speichern ist nicht möglich."; save.disabled = false; }
-        }]]);
-        save = body.lastChild.querySelector("button"); save.classList.add("vgo"); body.append(msg);
-        inp.addEventListener("input", drawList); drawList();
-      }
-    };
-    render();
+  const rid = room, WINDOW = 180000;
+  const all = sceneCandidates(HOME).concat([]);
+  const recent = s => Date.now() - (lastChange.get(s.entity_id) || 0) < WINDOW;
+  const inRoom = new Set(rid === HOME ? all.map(s => s.entity_id) : roomMembers(rid));
+  const changed = all.filter(recent), others = all.filter(s => !recent(s) && inRoom.has(s.entity_id));
+  const sel = new Set(changed.map(s => s.entity_id));
+  openPanel("Szene speichern", body => {
+    body.append(h("div", "info", changed.length
+      ? "Stelle die Szene in Apple Home ein und tippe hier auf „Szene speichern“. Diese Geräte haben sich gerade geändert:"
+      : "In den letzten Minuten hat sich nichts geändert. Stelle die Szene in Apple Home ein und öffne dieses Fenster noch einmal. Oder wähle unten Geräte von Hand."));
+    const inp = h("input", "textin"); inp.placeholder = "Name der Szene, zum Beispiel Abend"; inp.setAttribute("aria-label", "Name der Szene"); body.append(inp);
+    const list = h("div", "picklist"); body.append(list);
+    let more = !changed.length; const moreBtn = h("button", "ghostbtn"); moreBtn.type = "button";
+    const msg = h("div", "info err"); let save;
+    const row = s => { const r = h("button", "pick-row"); r.type = "button"; r.setAttribute("aria-pressed", String(sel.has(s.entity_id)));
+      r.append(h("span", "pick-check", "✓"), h("span", "pick-name", nameOf(s)), h("span", "pick-id", sceneText(sceneEntry(s), s.entity_id)));
+      r.addEventListener("click", () => { sel.has(s.entity_id) ? sel.delete(s.entity_id) : sel.add(s.entity_id); draw(); }); return r; };
+    const groups = items => SCENE_GROUPS.flatMap(([title, doms]) => { const it = items.filter(s => doms.includes(domainOf(s.entity_id))); return it.length ? [h("div", "pick-group", title), ...it.map(row)] : []; });
+    function draw() {
+      list.replaceChildren(...groups(changed), ...(more ? [h("div", "pick-group", "Weitere Geräte im Raum"), ...groups(others)] : []));
+      moreBtn.textContent = more ? "Weitere Geräte ausblenden" : `Weitere Geräte im Raum anzeigen (${others.length})`; moreBtn.hidden = !others.length || !changed.length;
+      if (save) save.disabled = !sel.size || !inp.value.trim();
+    }
+    body.append(moreBtn); moreBtn.addEventListener("click", () => { more = !more; draw(); });
+    actions(body, [["Szene speichern", async () => {
+      const name = inp.value.trim(); if (!name || !sel.size) return; save.disabled = true;
+      msg.textContent = "Einen Moment …";
+      await waitFor(() => [...sel].every(id => Date.now() - (lastChange.get(id) || 0) > 2500), 8000);   // Lampen fertig überblenden lassen
+      try { const r = await createScene(name, [...sel].filter(id => states.has(id)), rid); closeSheet();
+        toast(r.persistent ? `Szene „${name}“ gespeichert` : `Szene „${name}“ gilt nur bis zum nächsten Neustart. Zum dauerhaften Speichern braucht es Administratorrechte.`); }
+      catch (e) { msg.textContent = e.message || "Speichern ist nicht möglich."; save.disabled = false; }
+    }]]);
+    save = body.lastChild.querySelector("button"); save.classList.add("vgo"); body.append(msg);
+    inp.addEventListener("input", draw); draw(); setTimeout(() => inp.focus(), 50);
   });
 }
 
@@ -1709,12 +1694,12 @@ function renderRooms() {
   const bar = [];
   if (editing) {
     bar.push(mk(chipsOn() ? "Chips: An" : "Chips: Aus", () => { const c = cfgOf(); c.chips = !chipsOn(); saveLayout(); renderChips(); renderRooms(); }, "ghost"));
-    bar.push(mk("Szene erfassen", openSceneCapture, "ghost"));
     bar.push(mk("Szenen für Apple Home", () => openSceneBridge(roomMembers(room).filter(i => i.startsWith("scene."))), "ghost"));
     bar.push(mk("Räume", openRoomManager, "ghost"));
     if (room !== OTHER) bar.push(mk("Geräte", openDevicePicker, "ghost"));
     bar.push(mk("Zurücksetzen", () => { delete layout[room]; saveLayout(); tiles.forEach(t => { t.el.style.gridColumn = t.el.style.gridRow = ""; }); renderGrid(); }, "ghost"));
   }
+  if (!editing) bar.push(mk("+ Szene", openSceneCapture, "ghost"));
   bar.push(mk(editing ? "Fertig" : "Anordnen", () => setEditing(!editing)));
   $("editBar").replaceChildren(...bar);
 }
