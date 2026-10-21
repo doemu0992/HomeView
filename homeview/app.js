@@ -161,6 +161,7 @@ function notifyRelated(id) {
 function pushState(s) {
   states.set(s.entity_id, s);
   tiles.get(s.entity_id)?.update(s);
+  if (!s.entity_id.startsWith("scene.")) sceneRecheck(s.entity_id);
   scheduleChips();
   if (sheetCtx && sheetCtx.id === s.entity_id) sheetCtx.update(s);
   notifyRelated(s.entity_id);
@@ -931,6 +932,7 @@ async function createScene(name, ids, rid) {
     if (sceneId) { const o = (cfgOf().ent[sceneId] = cfgOf().ent[sceneId] || {}); o.name = name; }
   }
   if (!sceneId) throw new Error("Die Szene erscheint nicht in Home Assistant.");
+  sceneDefs.set(sceneId, { entities });
   if (!roomMembers(rid).includes(sceneId)) toggleMember(rid, sceneId);
   saveLayout(); renderRooms(); renderGrid();
   return { sceneId, persistent };
@@ -989,11 +991,44 @@ function openSceneCapture() {
   });
 }
 
+/* Eine Szene gilt als aktiv, solange alle ihre Geräte (im Rahmen kleiner Rundungsunterschiede) so stehen, wie die Szene sie speichert */
+const sceneDefs = new Map();        // Szene -> { entities: { entity_id: Zielzustand } }
+const SCENE_TOL = { brightness: 8, color_temp_kelvin: 200, current_position: 4, current_tilt_position: 4, percentage: 6, humidity: 3, temperature: 0.6, target_temp_high: 0.6, target_temp_low: 0.6, hs_color: 5, xy_color: 0.03, rgb_color: 14, rgbw_color: 14, rgbww_color: 14 };
+function sceneMatches(cur, want) {
+  const have = sceneEntry(cur);
+  if (have.state !== want.state) return false;
+  return Object.entries(want).every(([k, v]) => {
+    if (k === "state" || v == null) return true;
+    const h2 = have[k]; if (h2 == null) return false;
+    if (Array.isArray(v)) return v.every((x, i) => Math.abs(x - h2[i]) <= (SCENE_TOL[k] ?? 1));
+    if (typeof v === "number") return Math.abs(v - h2) <= (SCENE_TOL[k] ?? 1);
+    return v === h2;
+  });
+}
+function sceneActive(id) {
+  const def = sceneDefs.get(id); if (!def) return false;
+  let n = 0;
+  for (const [e, want] of Object.entries(def.entities)) {
+    const cur = states.get(e); if (!cur || cur.state === "unavailable") continue;
+    if (!sceneMatches(cur, want)) return false; n++;
+  }
+  return n > 0;
+}
+async function ensureSceneDef(id) {
+  if (sceneDefs.has(id) || !apiReq) return;
+  const cid = states.get(id)?.attributes.id; if (!cid) return;
+  try { const d = await apiReq("GET", "config/scene/config/" + cid); if (d && d.entities) { sceneDefs.set(id, { entities: d.entities }); tiles.get(id)?.update(states.get(id)); } } catch {}
+}
+function sceneRecheck(entityId) {
+  tiles.forEach((t, id) => { if (id.startsWith("scene.") && sceneDefs.get(id)?.entities[entityId] && states.has(id)) t.update(states.get(id)); });
+}
 const sceneCfgId = id => states.get(id)?.attributes.id;
 async function writeScene(id, patch) {
   const cid = sceneCfgId(id), cur = await apiReq("GET", "config/scene/config/" + cid);
   await apiReq("POST", "config/scene/config/" + cid, { ...cur, id: cid, ...patch(cur) });
+  sceneDefs.delete(id);
   await conn.call("scene", "reload", {});
+  ensureSceneDef(id);
 }
 
 /* ---------- Kachel-Fabrik ---------- */
@@ -1088,7 +1123,11 @@ const BUILDERS = {
       el.classList.add("on"); el.setAttribute("aria-pressed", "true"); setText(el, ".state", "Aktiv");
       clearTimeout(t); t = setTimeout(() => tiles.get(id)?.update(states.get(id)), 1600);
     });
-    return { el, update(s) { applyCommon(el, s, false, "Tippen zum Starten"); } };
+    return { el, update(s) {
+      ensureSceneDef(id);
+      const on = sceneActive(id);
+      applyCommon(el, s, on, on ? "Aktiv" : "Tippen zum Starten");
+    } };
   },
   button(id) {
     const el = basic("button");
