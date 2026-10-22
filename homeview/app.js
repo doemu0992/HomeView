@@ -303,7 +303,7 @@ let sheetCtx = null;                // { id, update(state) }
 
 const domainOf = id => id.split(".")[0];
 /* Der Name entscheidet: „Lüfter“/„Ventilator“ im Namen = Lüfter, auch wenn Home Assistant das Gerät als Licht führt */
-const HV_VERSION = "2026-10-22.7";
+const HV_VERSION = "2026-10-22.8";
 const FAN_RE = /l[uü]e?fter|ventilator/i;
 const isFanLike = s => domainOf(s.entity_id) === "fan" || FAN_RE.test(nameOf(s));
 const nameOf = s => {
@@ -2215,6 +2215,42 @@ function openWeatherPanel() {
 setInterval(() => $("app").hidden || renderHeader(), 15000);
 
 
+/* ---------- Offene Türen und Fenster: Liste hinter dem Chip ---------- */
+const OPEN_KINDS = [
+  { id: "window", classes: ["window"], icon: "window", many: "Fenster", title: "Fenster" },
+  { id: "door", classes: ["door", "opening", "garage_door"], icon: "door", many: "Türen", title: "Türen" }];
+function openFor(min) { return min < 1 ? "gerade eben" : min < 60 ? "seit " + min + " Min" : "seit " + Math.floor(min / 60) + " Std " + (min % 60) + " Min"; }
+function openOpenPanel(kindId, rid, pool) {
+  const k = OPEN_KINDS.find(x => x.id === kindId);
+  const ids = pool.filter(s => k.classes.includes(s.attributes.device_class) && s.state !== "unavailable").map(s => s.entity_id);
+  let showAll = false, list, head, sub, sg;
+  const place = rid === HOME ? "im ganzen Haus" : "in " + (roomListAll().find(r => r.id === rid)?.name || "diesem Raum");
+  const areaOf = id => areas.find(a => a.area_id === entityArea.get(id))?.name || "";
+  const draw = () => {
+    const all = ids.map(i => states.get(i)).filter(Boolean), open = all.filter(s => s.state === "on");
+    const since = s => { const t = Date.parse(s.last_changed || ""); return isNaN(t) ? "" : openFor(Math.max(0, Math.round((Date.now() - t) / 60000))); };
+    head.textContent = open.length ? `${open.length} ${k.many} offen` : `${k.title} geschlossen`;
+    sub.textContent = `${all.length} ${k.many} ${place}`;
+    sg.set(showAll ? "all" : "open");
+    const rows = (showAll ? all : open).slice().sort((a, b) => (b.state === "on") - (a.state === "on") || nameOf(a).localeCompare(nameOf(b), "de"));
+    list.replaceChildren(...(rows.length ? rows.map(s => {
+      const on = s.state === "on", r = h("div", "op-row" + (on ? "" : " closed"));
+      const ic = h("span", "op-ic"); ic.innerHTML = icon(k.id === "window" ? "window" : "door");
+      const tx = h("span", "op-tx"); tx.append(h("b", "", nameOf(s)), h("span", "", areaOf(s.entity_id)));
+      const st = h("span", "op-st", on ? "Offen" : "Geschlossen"); if (on && since(s)) st.append(h("small", "", since(s)));
+      r.append(ic, tx, st); return r;
+    }) : [h("div", "op-empty", "Alles geschlossen")]));
+  };
+  openPanel(k.title, body => {
+    const top = h("div", "op-head"); head = h("b"); sub = h("span"); top.append(head, sub); body.append(top);
+    sg = seg(body, { label: "Anzeige", options: [["open", "Offene"], ["all", "Alle"]], on: v => { showAll = v === "all"; draw(); } });
+    list = h("div", "op-list"); body.append(list);
+    draw();
+  });
+  $("sheetIco").innerHTML = icon(k.icon);
+  sheetCtx = { id: ids[0], update: draw, rel: new Set(ids) };
+}
+
 /* ---------- Chips: Übersicht pro Raum (Temperatur, Feuchte, Lichter, Fenster, …) ---------- */
 /* Chips sind standardmäßig an. Aus: Adresse mit #chips=0 oder unter „Anordnen → Chips“. */
 const chipsOn = () => {
@@ -2258,8 +2294,11 @@ function renderChips() {
     cls: fOn.length ? "active" : "",
     on: () => fans.forEach(s => conn.call(domainOf(s.entity_id), fOn.length ? "turn_off" : "turn_on", {}, s.entity_id)) });
 
-  const openers = dom("binary_sensor").filter(s => ["door", "window", "opening", "garage_door"].includes(s.attributes.device_class) && s.state === "on");
-  if (openers.length) add("open", "door", openers.length === 1 ? `${nameOf(openers[0])} offen` : `${openers.length} offen`, { cls: "warn" });
+  const rid = room;
+  OPEN_KINDS.forEach(k => {
+    const open = dom("binary_sensor").filter(s => k.classes.includes(s.attributes.device_class) && s.state === "on");
+    if (open.length) add("open-" + k.id, k.icon, open.length === 1 ? `${nameOf(open[0])} offen` : `${open.length} ${k.many} offen`, { cls: "warn", on: () => openOpenPanel(k.id, rid, pool) });
+  });
   const locks = dom("lock"), unlocked = locks.filter(s => s.state !== "locked");
   if (locks.length) add("lock", "lock", unlocked.length ? (unlocked.length === 1 ? `${nameOf(unlocked[0])} offen` : `${unlocked.length} Schlösser offen`) : "Verriegelt", { cls: unlocked.length ? "warn" : "" });
   const playing = dom("media_player").filter(s => s.state === "playing");
@@ -2583,7 +2622,11 @@ function startDemo() {
     S("sensor.temp_schlaf", "19.2", { friendly_name: "Temperatur Schlafzimmer", device_class: "temperature", unit_of_measurement: "°C" }),
     S("sensor.feuchte_schlaf", "52", { friendly_name: "Luftfeuchte Schlafzimmer", device_class: "humidity", unit_of_measurement: "%" }),
     S("sensor.feuchte_wz", "46", { friendly_name: "Luftfeuchte", device_class: "humidity", unit_of_measurement: "%" }),
-    S("binary_sensor.fenster_wz", "on", { friendly_name: "Fenster Wohnzimmer", device_class: "window" }),
+    { ...S("binary_sensor.fenster_wz", "on", { friendly_name: "Fenster Wohnzimmer", device_class: "window" }), last_changed: new Date(Date.now() - 95 * 60000).toISOString() },
+    { ...S("binary_sensor.fenster_bad", "on", { friendly_name: "Fenster Bad", device_class: "window" }), last_changed: new Date(Date.now() - 12 * 60000).toISOString() },
+    S("binary_sensor.fenster_kueche", "off", { friendly_name: "Fenster Küche", device_class: "window" }),
+    { ...S("binary_sensor.haustuer", "on", { friendly_name: "Haustür", device_class: "door" }), last_changed: new Date(Date.now() - 3 * 60000).toISOString() },
+    { ...S("binary_sensor.balkontuer", "on", { friendly_name: "Balkontür", device_class: "door" }), last_changed: new Date(Date.now() - 47 * 60000).toISOString() },
     S("binary_sensor.bewegung_flur", "off", { friendly_name: "Bewegung Flur", device_class: "motion" }),
     S("input_number.nachtabsenkung", "17", { friendly_name: "Nachtabsenkung", min: 12, max: 21, step: 0.5, unit_of_measurement: "°C" }),
     S("input_select.hausmodus", "Zuhause", { friendly_name: "Hausmodus", options: ["Zuhause", "Abwesend", "Urlaub"] }),

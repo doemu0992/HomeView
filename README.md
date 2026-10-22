@@ -129,3 +129,7 @@ Eine Szene gilt nur als aktiv, wenn ihre Geräte stimmen und keine andere Szene 
 ## Alarmanlage in Apple Home
 
 Apple Home hat kein Zahlenfeld, deshalb lässt sich eine Alarmanlage mit Code dort nicht unscharf schalten. Im Alarm-Fenster legt „Für Apple Home bereitstellen (ohne Zahlenfeld)“ einen Schalter „Alarm …“ an, der mit hinterlegtem Code scharf (Abwesend, Zuhause oder Nacht) und unscharf schaltet, und nimmt ihn in die HomeKit-Bridge auf. Der Schalter ist an, solange die Anlage nicht unscharf ist. Wer Apple Home bedienen darf, kann damit die Anlage ausschalten. Der Code liegt im Schalter in Home Assistant und ist nur für Administratoren sichtbar. Voraussetzung sind Administratorrechte und eine Anmeldung über das Dashboard.
+
+## Offene Türen und Fenster
+
+Fenster und Türen (inklusive Garagentore) haben je einen eigenen Chip („2 Fenster offen“, „Haustür offen“). Auf „Zuhause“ zählt er alle offenen im ganzen Haus, in einem Raum nur die Sensoren dieses Raums. Ein Tipp auf den Chip öffnet die Liste mit Name, Raum und der Zeit seit dem Öffnen. „Offene“ und „Alle“ schalten zwischen den offenen und allen Sensoren um. Die Zeit stammt vom letzten Wechsel des Sensors auf „offen“.

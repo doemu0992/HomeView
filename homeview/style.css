@@ -522,3 +522,15 @@ main{flex:1}
 .sheet-card .actions button.vgo{background:#8f7cff;color:#120c2a}
 .sheet-card .actions button.vgo:disabled{opacity:.45}
 .icon-grid[hidden],.icon-group-title[hidden],.icon-grid button[hidden]{display:none}
+
+/* Offene Türen und Fenster */
+.op-head{display:grid;gap:2px;margin-bottom:.8rem}.op-head b{font-size:1.2rem}.op-head span{color:var(--mut,rgba(255,255,255,.62))}
+.op-list{display:grid;gap:.5rem;margin-top:.8rem}
+.op-row{display:flex;align-items:center;gap:.75rem;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.07);border-radius:1.1rem;padding:.7rem .85rem}
+.op-ic{width:2.5rem;height:2.5rem;border-radius:50%;display:grid;place-items:center;flex:none;background:rgba(245,176,66,.2);color:#f5b042}
+.op-ic .ic{width:1.3rem;height:1.3rem}
+.op-row.closed .op-ic{background:rgba(255,255,255,.1);color:rgba(255,255,255,.62)}
+.op-tx{flex:1;min-width:0}.op-tx b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.op-tx span{color:rgba(255,255,255,.62);font-size:.85rem}
+.op-st{font-weight:600;color:#f5b042;white-space:nowrap;text-align:right}.op-st small{display:block;font-weight:500;font-size:.78rem;color:rgba(255,255,255,.62)}
+.op-row.closed .op-st{color:#5be08a}
+.op-empty{padding:1.1rem;text-align:center;color:#5be08a;border:1px dashed rgba(255,255,255,.18);border-radius:1.1rem;font-weight:600}
