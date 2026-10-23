@@ -303,7 +303,7 @@ let sheetCtx = null;                // { id, update(state) }
 
 const domainOf = id => id.split(".")[0];
 /* Der Name entscheidet: „Lüfter“/„Ventilator“ im Namen = Lüfter, auch wenn Home Assistant das Gerät als Licht führt */
-const HV_VERSION = "2026-10-22.8";
+const HV_VERSION = "2026-10-23.1";
 const FAN_RE = /l[uü]e?fter|ventilator/i;
 const isFanLike = s => domainOf(s.entity_id) === "fan" || FAN_RE.test(nameOf(s));
 const nameOf = s => {

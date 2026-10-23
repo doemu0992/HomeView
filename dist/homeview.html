@@ -39,7 +39,7 @@ header{display:flex;justify-content:space-between;align-items:flex-start;gap:1.5
 .date{font-size:1.5rem;color:var(--ink-2);margin-top:.4rem;font-weight:500}
 main{
 display:grid; gap:1.1rem; min-height:0; overflow-y:auto; scrollbar-width:none; padding:.2rem;
-grid-template-columns:repeat(auto-fill,minmax(10.5rem,1fr)); grid-auto-rows:9rem; grid-auto-flow:dense;
+grid-template-columns:repeat(auto-fill,minmax(9.6rem,1fr)); grid-auto-rows:9rem; grid-auto-flow:dense;
 align-content:start;
 }
 main::-webkit-scrollbar{display:none}
@@ -864,7 +864,7 @@ const tiles = new Map();            // entity_id -> { el, update(state) }
 let sheetCtx = null;                // { id, update(state) }
 const domainOf = id => id.split(".")[0];
 /* Der Name entscheidet: „Lüfter“/„Ventilator“ im Namen = Lüfter, auch wenn Home Assistant das Gerät als Licht führt */
-const HV_VERSION = "2026-10-22.8";
+const HV_VERSION = "2026-10-23.1";
 const FAN_RE = /l[uü]e?fter|ventilator/i;
 const isFanLike = s => domainOf(s.entity_id) === "fan" || FAN_RE.test(nameOf(s));
 const nameOf = s => {
